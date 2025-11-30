@@ -1,17 +1,62 @@
-//
-//  Govee_MacApp.swift
-//  Govee Mac
-//
-//  Created by Joris Conrad on 30.11.25.
-//
-
 import SwiftUI
 
 @main
 struct Govee_MacApp: App {
+    @StateObject private var settings: SettingsStore
+    @StateObject private var deviceStore: DeviceStore
+    @StateObject private var controller: GoveeController
+    @StateObject private var menuBarController: MenuBarController
+
+    @State private var showWelcome: Bool
+
+    init() {
+        let settingsStore = SettingsStore()
+        let store = DeviceStore()
+        let ctrl = GoveeController(deviceStore: store, settings: settingsStore)
+        let menuBar = MenuBarController(deviceStore: store, controller: ctrl)
+        
+        _settings = StateObject(wrappedValue: settingsStore)
+        _deviceStore = StateObject(wrappedValue: store)
+        _controller = StateObject(wrappedValue: ctrl)
+        _menuBarController = StateObject(wrappedValue: menuBar)
+        _showWelcome = State(initialValue: !UserDefaults.standard.bool(forKey: "hasCompletedWelcome"))
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(settings)
+                .environmentObject(deviceStore)
+                .environmentObject(controller)
+                .sheet(isPresented: $showWelcome) {
+                    WelcomeView()
+                        .environmentObject(settings)
+                        .environmentObject(deviceStore)
+                        .environmentObject(controller)
+                }
+                .task { 
+                    await controller.refresh()
+                }
+                .onChange(of: deviceStore.devices) { _ in
+                    menuBarController.updateMenu()
+                }
+                .onChange(of: deviceStore.groups) { _ in
+                    menuBarController.updateMenu()
+                }
+        }
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Govee Mac") {
+                    NSApp.orderFrontStandardAboutPanel()
+                }
+            }
+        }
+        
+        Settings {
+            SettingsView()
+                .environmentObject(settings)
+                .environmentObject(deviceStore)
+                .environmentObject(controller)
         }
     }
 }

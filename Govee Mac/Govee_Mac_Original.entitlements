@@ -2,39 +2,23 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- App Sandbox (required for Mac App Store) -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	
-	<!-- File Access -->
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
-	
-	<!-- Network Access (required for Cloud API, LAN, Home Assistant) -->
 	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
-	
-	<!-- App Groups (for widget data sharing) -->
-	<!-- Change to your own group ID if needed -->
+	<key>com.apple.developer.homekit</key>
+	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.govee.mac</string>
 	</array>
-	
-	<!-- Keychain Access (for secure API key storage) -->
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)com.govee.mac</string>
 	</array>
-	
-	<!-- HomeKit (optional - enable if you want HomeKit support) -->
-	<!-- NOTE: Free Apple ID can use this, but requires explicit setup in Xcode -->
-	<!-- Uncomment the lines below to enable HomeKit: -->
-	<!-- 
-	<key>com.apple.developer.homekit</key>
-	<true/>
-	-->
 </dict>
 </plist>

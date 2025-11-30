@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: macos-13
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Select Xcode version
+      run: sudo xcode-select -s /Applications/Xcode_15.0.app/Contents/Developer
+      
+    - name: Show Xcode version
+      run: xcodebuild -version
+      
+    - name: Build (without code signing)
+      run: |
+        cd "Govee Mac"
+        xcodebuild -project "Govee Mac.xcodeproj" \
+          -scheme "Govee Mac" \
+          -configuration Debug \
+          -destination 'platform=macOS' \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          clean build
+      
+    - name: Run tests (if any)
+      run: |
+        cd "Govee Mac"
+        xcodebuild test \
+          -project "Govee Mac.xcodeproj" \
+          -scheme "Govee Mac" \
+          -destination 'platform=macOS' \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          || echo "No tests configured yet"
+      continue-on-error: true
+      
+    - name: Check for compiler warnings
+      run: |
+        cd "Govee Mac"
+        xcodebuild -project "Govee Mac.xcodeproj" \
+          -scheme "Govee Mac" \
+          -configuration Debug \
+          CODE_SIGN_IDENTITY="" \
+          CODE_SIGNING_REQUIRED=NO \
+          CODE_SIGNING_ALLOWED=NO \
+          clean build 2>&1 | grep -i warning || echo "No warnings found"
+      continue-on-error: true
+      
+    - name: Swift lint (optional)
+      run: |
+        if command -v swiftlint &> /dev/null; then
+          cd "Govee Mac/Govee Mac"
+          swiftlint lint --reporter github-actions-logging
+        else
+          echo "SwiftLint not installed, skipping"
+        fi
+      continue-on-error: true
+
+  syntax-check:
+    name: Swift Syntax Check
+    runs-on: macos-13
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check Swift files
+      run: |
+        cd "Govee Mac/Govee Mac"
+        for file in $(find . -name "*.swift" -not -path "*/.*"); do
+          echo "Checking $file"
+          xcrun swiftc -parse "$file" \
+            -sdk $(xcrun --show-sdk-path --sdk macosx) \
+            || exit 1
+        done
