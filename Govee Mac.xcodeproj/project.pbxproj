@@ -7,19 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		209313B605604EAF8C30C5D6 /* GoveeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25ED2AEB88724B72A2E908DE /* GoveeModels.swift */; };
 		5B80D9BD2EDCB128000DBD74 /* Govee_MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9BC2EDCB128000DBD74 /* Govee_MacApp.swift */; };
 		5B80D9BF2EDCB128000DBD74 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9BE2EDCB128000DBD74 /* ContentView.swift */; };
-		CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688AE791B97D4E60A2269386 /* MenuBarController.swift */; };
-		688AE791B97D4E60A2269386 /* MenuBarController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
-		209313B605604EAF8C30C5D6 /* GoveeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25ED2AEB88724B72A2E908DE /* GoveeModels.swift */; };
-		25ED2AEB88724B72A2E908DE /* GoveeModels.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GoveeModels.swift; sourceTree = "<group>"; };
-		4544DC190BBE4AE9B0B7E544 /* GoveeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E99BD47BFEE40D694F7D2FD /* GoveeModels.swift */; };
-		9E99BD47BFEE40D694F7D2FD /* GoveeModels.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GoveeModels.swift; sourceTree = "<group>"; };
 		5B80D9C12EDCB12A000DBD74 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5B80D9C02EDCB12A000DBD74 /* Assets.xcassets */; };
 		5B80D9C42EDCB12A000DBD74 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5B80D9C32EDCB12A000DBD74 /* Preview Assets.xcassets */; };
 		5B80D9CF2EDCB12A000DBD74 /* Govee_MacTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9CE2EDCB12A000DBD74 /* Govee_MacTests.swift */; };
 		5B80D9D92EDCB12B000DBD74 /* Govee_MacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9D82EDCB12B000DBD74 /* Govee_MacUITests.swift */; };
 		5B80D9DB2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9DA2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift */; };
+		CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688AE791B97D4E60A2269386 /* MenuBarController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -40,6 +36,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		25ED2AEB88724B72A2E908DE /* GoveeModels.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GoveeModels.swift; sourceTree = "<group>"; };
+		5B72C6132EDE0E9300C28329 /* Govee-Mac-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Govee-Mac-Info.plist"; sourceTree = SOURCE_ROOT; };
 		5B80D9B92EDCB128000DBD74 /* Govee Mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Govee Mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B80D9BC2EDCB128000DBD74 /* Govee_MacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Govee_MacApp.swift; sourceTree = "<group>"; };
 		5B80D9BE2EDCB128000DBD74 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -51,6 +49,7 @@
 		5B80D9D42EDCB12B000DBD74 /* Govee MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Govee MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B80D9D82EDCB12B000DBD74 /* Govee_MacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Govee_MacUITests.swift; sourceTree = "<group>"; };
 		5B80D9DA2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Govee_MacUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		688AE791B97D4E60A2269386 /* MenuBarController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -101,11 +100,11 @@
 		5B80D9BB2EDCB128000DBD74 /* Govee Mac */ = {
 			isa = PBXGroup;
 			children = (
+				5B72C6132EDE0E9300C28329 /* Govee-Mac-Info.plist */,
 				5B80D9BC2EDCB128000DBD74 /* Govee_MacApp.swift */,
 				5B80D9BE2EDCB128000DBD74 /* ContentView.swift */,
 				688AE791B97D4E60A2269386 /* MenuBarController.swift */,
 				25ED2AEB88724B72A2E908DE /* GoveeModels.swift */,
-				9E99BD47BFEE40D694F7D2FD /* GoveeModels.swift */,
 				5B80D9C02EDCB12A000DBD74 /* Assets.xcassets */,
 				5B80D9C52EDCB12A000DBD74 /* Govee_Mac.entitlements */,
 				5B80D9C22EDCB12A000DBD74 /* Preview Content */,
@@ -271,7 +270,6 @@
 				5B80D9BF2EDCB128000DBD74 /* ContentView.swift in Sources */,
 				CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */,
 				209313B605604EAF8C30C5D6 /* GoveeModels.swift in Sources */,
-				4544DC190BBE4AE9B0B7E544 /* GoveeModels.swift in Sources */,
 				5B80D9BD2EDCB128000DBD74 /* Govee_MacApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -312,19 +310,7 @@
 		5B80D9DC2EDCB12B000DBD74 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -354,6 +340,8 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -387,19 +375,7 @@
 		5B80D9DD2EDCB12B000DBD74 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -429,6 +405,8 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -454,33 +432,23 @@
 		5B80D9DF2EDCB12B000DBD74 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = "Govee Mac/Govee_Mac.entitlements";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Govee Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
-				INFOPLIST_KEY_NSHomeKitUsageDescription = "Govee Mac needs access to control your HomeKit-enabled Govee lights.";
-				INFOPLIST_KEY_NSHomeKitUsageDescription = "Govee Mac needs access to control your HomeKit-enabled Govee lights.";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Govee-Mac-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Govee Mac Controller";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHomeKitUsageDescription = "Govee Mac needs access to control your HomeKit-enabled Govee lights.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -497,33 +465,23 @@
 		5B80D9E02EDCB12B000DBD74 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_ENTITLEMENTS = "Govee Mac/Govee_Mac.entitlements";
 				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Govee Mac/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
-				INFOPLIST_KEY_NSHomeKitUsageDescription = "Govee Mac needs access to control your HomeKit-enabled Govee lights.";
-				INFOPLIST_KEY_NSHomeKitUsageDescription = "Govee Mac needs access to control your HomeKit-enabled Govee lights.";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Govee-Mac-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Govee Mac Controller";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHomeKitUsageDescription = "Govee Mac needs access to control your HomeKit-enabled Govee lights.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -540,18 +498,10 @@
 		5B80D9E22EDCB12B000DBD74 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -569,18 +519,10 @@
 		5B80D9E32EDCB12B000DBD74 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -598,17 +540,9 @@
 		5B80D9E52EDCB12B000DBD74 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -625,17 +559,9 @@
 		5B80D9E62EDCB12B000DBD74 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
-				CODE_SIGNING_REQUIRED = NO;
-				CODE_SIGNING_ALLOWED = NO;
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
