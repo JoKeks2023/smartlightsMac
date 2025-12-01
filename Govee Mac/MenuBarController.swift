@@ -36,8 +36,8 @@ class MenuBarController: ObservableObject {
                 let deviceItem = NSMenuItem(title: device.name, action: nil, keyEquivalent: "")
                 let submenu = NSMenu()
                 
-                let powerItem = NSMenuItem(title: device.isOn == true ? "Turn Off" : "Turn On", 
-                                          action: #selector(togglePower(_:)), 
+                let powerItem = NSMenuItem(title: device.isOn == true ? "Turn Off" : "Turn On",
+                                          action: #selector(togglePower(_:)),
                                           keyEquivalent: "")
                 powerItem.target = self
                 powerItem.representedObject = device.id
@@ -134,8 +134,23 @@ class MenuBarController: ObservableObject {
     
     @objc private func openMainWindow() {
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first {
+        
+        // Check if any window is already open. If so, bring it to the front.
+        if let window = NSApp.windows.first(where: { $0.isMiniaturized == false && $0.isVisible }) {
             window.makeKeyAndOrderFront(nil)
+            return
         }
+        
+        // If no window is visible, try to un-miniaturize one.
+        if let miniaturizedWindow = NSApp.windows.first(where: { $0.isMiniaturized }) {
+            miniaturizedWindow.deminiaturize(nil)
+            return
+        }
+
+        // If the window was closed (red button), we need to re-open it.
+        // This is the modern, correct way for SwiftUI apps.
+        // The selector is part of the private API but is the standard way to achieve this.
+        // It asks the App Scene to create a new window if one isn't available.
+        NSApp.sendAction(Selector(("showWindow:")), to: nil, from: nil)
     }
 }
