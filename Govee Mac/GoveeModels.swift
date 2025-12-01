@@ -8,14 +8,14 @@ import HomeKit
 
 // MARK: - Models
 
-enum TransportKind: String, Codable, Hashable { 
-    case cloud, lan, homeKit, homeAssistant 
+enum TransportKind: String, Codable, Hashable {
+    case cloud, lan, homeKit, homeAssistant
 }
 
-struct DeviceColor: Codable, Hashable { 
+struct DeviceColor: Codable, Hashable {
     var r: Int
     var g: Int
-    var b: Int 
+    var b: Int
 }
 
 struct GoveeDevice: Identifiable, Hashable, Codable {
@@ -70,8 +70,8 @@ struct APIKeyKeychain {
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
         ]
         let status = SecItemAdd(addQuery as CFDictionary, nil)
-        guard status == errSecSuccess else { 
-            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) 
+        guard status == errSecSuccess else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
         }
     }
     
@@ -86,8 +86,8 @@ struct APIKeyKeychain {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess else { 
-            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status)) 
+        guard status == errSecSuccess else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
         }
         if let data = result as? Data {
             return String(data: data, encoding: .utf8)
@@ -328,51 +328,46 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
                 try? await Task.sleep(for: .seconds(5))
                 self.browser?.stop()
                 if let cont = self.continuation {
-                    Task {
-                        let devices = await self.serviceStore.resolvedDevices
-                        cont.resume(returning: devices)
-                        self.continuation = nil
-                    }
+                    let devices = await self.serviceStore.resolvedDevices
+                    cont.resume(returning: devices)
+                    self.continuation = nil
                 }
             }
         }
     }
     
-    nonisolated func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-        Task {
-            await serviceStore.addService(service)
-            await MainActor.run {
-                service.delegate = self
-                service.resolve(withTimeout: 3.0)
-            }
-        }
+    // Handle delegate callbacks on the main actor to avoid Sendable violations
+    @MainActor
+    func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
+        // Do not pass NetService into actor; resolve immediately on main actor
+        service.delegate = self
+        service.resolve(withTimeout: 3.0)
     }
     
-    nonisolated func netServiceDidResolveAddress(_ sender: NetService) {
-        Task {
-            guard let addresses = sender.addresses, !addresses.isEmpty,
-                  let ipAddress = await self.extractIPAddress(from: addresses[0]) else { return }
-            
-            let device = GoveeDevice(
-                id: "lan-\(sender.name)-\(ipAddress)",
-                name: sender.name,
-                model: nil,
-                ipAddress: ipAddress,
-                online: true,
-                supportsBrightness: true,
-                supportsColor: true,
-                supportsColorTemperature: false,
-                transports: [.lan],
-                isOn: nil,
-                brightness: nil,
-                color: nil,
-                colorTemperature: nil
-            )
-            await serviceStore.addDevice(device)
-        }
+    @MainActor
+    func netServiceDidResolveAddress(_ sender: NetService) {
+        guard let addresses = sender.addresses, !addresses.isEmpty,
+              let ipAddress = self.extractIPAddress(from: addresses[0]) else { return }
+        
+        let device = GoveeDevice(
+            id: "lan-\(sender.name)-\(ipAddress)",
+            name: sender.name,
+            model: nil,
+            ipAddress: ipAddress,
+            online: true,
+            supportsBrightness: true,
+            supportsColor: true,
+            supportsColorTemperature: false,
+            transports: [.lan],
+            isOn: nil,
+            brightness: nil,
+            color: nil,
+            colorTemperature: nil
+        )
+        Task { await serviceStore.addDevice(device) }
     }
     
-    private func extractIPAddress(from data: Data) async -> String? {
+    private func extractIPAddress(from data: Data) -> String? {
         var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
         data.withUnsafeBytes { (pointer: UnsafeRawBufferPointer) in
             guard let sockaddr = pointer.baseAddress?.assumingMemoryBound(to: sockaddr.self) else { return }
@@ -381,7 +376,8 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
         return String(cString: hostname)
     }
     
-    nonisolated func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
+    @MainActor
+    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
         // Ignore resolution failures
     }
 }
