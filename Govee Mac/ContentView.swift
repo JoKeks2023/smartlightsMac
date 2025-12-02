@@ -212,6 +212,15 @@ struct ContentView: View {
         if let dev = currentDevice { return transportBadge(dev) }
         if deviceStore.selectedGroupID != nil { return "Group" }
         return "" }
+    
+    private func isValidIPAddress(_ ip: String) -> Bool {
+        let parts = ip.split(separator: ".")
+        guard parts.count == 4 else { return false }
+        return parts.allSatisfy { part in
+            guard let num = Int(part), num >= 0, num <= 255 else { return false }
+            return true
+        }
+    }
 
     private func addDevice(_ deviceID: String, toGroup groupID: String) {
         guard let idx = deviceStore.groups.firstIndex(where: { $0.id == groupID }) else { return }
@@ -239,7 +248,7 @@ struct ContentView: View {
                     deviceStore.selectedGroupID = nil
                     showAddDevice = false
                     newDeviceIP = ""; newDeviceName = ""; newDeviceModel = ""
-                }.disabled(newDeviceIP.isEmpty)
+                }.disabled(newDeviceIP.isEmpty || !isValidIPAddress(newDeviceIP))
             }
         }
         .padding(20)

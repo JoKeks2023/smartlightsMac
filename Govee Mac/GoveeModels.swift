@@ -47,55 +47,6 @@ struct DeviceGroup: Identifiable, Codable, Equatable {
     }
 }
 
-// MARK: - Keychain
-
-struct APIKeyKeychain {
-    private static let service = "com.govee.mac.api"
-    private static let account = "goveeApiKey"
-    
-    static func save(key: String) throws {
-        let data = key.data(using: .utf8) ?? Data()
-        let deleteQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        SecItemDelete(deleteQuery as CFDictionary)
-        
-        let addQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
-        ]
-        let status = SecItemAdd(addQuery as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
-        }
-    }
-    
-    static func load() throws -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-            kSecReturnData as String: true
-        ]
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecItemNotFound { return nil }
-        guard status == errSecSuccess else {
-            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
-        }
-        if let data = result as? Data {
-            return String(data: data, encoding: .utf8)
-        }
-        return nil
-    }
-}
-
 // MARK: - Stores
 
 final class SettingsStore: ObservableObject {
@@ -130,6 +81,7 @@ final class SettingsStore: ObservableObject {
     }
 }
 
+@MainActor
 final class DeviceStore: ObservableObject {
     @Published var devices: [GoveeDevice] = []
     @Published var selectedDeviceID: String?
@@ -314,6 +266,16 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
     override init() {
         super.init()
     }
+    
+    deinit {
+        cleanup()
+    }
+    
+    private func cleanup() {
+        browser?.stop()
+        browser?.delegate = nil
+        browser = nil
+    }
 
     func refreshDevices() async throws -> [GoveeDevice] {
         return try await withCheckedThrowingContinuation { continuation in
@@ -327,6 +289,7 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
             Task {
                 try? await Task.sleep(for: .seconds(5))
                 self.browser?.stop()
+                self.browser?.delegate = nil
                 if let cont = self.continuation {
                     let devices = await self.serviceStore.resolvedDevices
                     cont.resume(returning: devices)
@@ -573,6 +536,12 @@ struct HomeAssistantDiscovery: DeviceDiscoveryProtocol {
                     let state = obj["state"] as? String
                     let isOn = state == "on"
                     let brightness = attr["brightness"] as? Int
+                    let brightnessPercent: Int?
+                    if let b = brightness {
+                        brightnessPercent = Int(Double(b) / 255.0 * 100.0)
+                    } else {
+                        brightnessPercent = nil
+                    }
                     
                     devices.append(GoveeDevice(
                         id: entityId,
@@ -585,7 +554,7 @@ struct HomeAssistantDiscovery: DeviceDiscoveryProtocol {
                         supportsColorTemperature: supportsCT,
                         transports: [.homeAssistant],
                         isOn: isOn,
-                        brightness: brightness != nil ? Int(Double(brightness!) / 255.0 * 100.0) : nil,
+                        brightness: brightnessPercent,
                         color: nil,
                         colorTemperature: nil
                     ))
