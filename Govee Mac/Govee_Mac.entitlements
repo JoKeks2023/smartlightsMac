@@ -16,25 +16,14 @@
 	<key>com.apple.security.network.server</key>
 	<true/>
 	
-	<!-- App Groups (for widget data sharing) -->
-	<!-- Change to your own group ID if needed -->
-	<key>com.apple.security.application-groups</key>
-	<array>
-		<string>group.com.govee.mac</string>
-	</array>
-	
 	<!-- Keychain Access (for secure API key storage) -->
 	<key>keychain-access-groups</key>
 	<array>
 		<string>$(AppIdentifierPrefix)com.govee.mac</string>
 	</array>
 	
-	<!-- HomeKit (optional - enable if you want HomeKit support) -->
-	<!-- NOTE: Free Apple ID can use this, but requires explicit setup in Xcode -->
-	<!-- Uncomment the lines below to enable HomeKit: -->
-	<!-- 
+	<!-- HomeKit Access (for controlling HomeKit devices) -->
 	<key>com.apple.developer.homekit</key>
 	<true/>
-	-->
 </dict>
 </plist>

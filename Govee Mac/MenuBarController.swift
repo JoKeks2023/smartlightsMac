@@ -10,10 +10,22 @@ class MenuBarController: ObservableObject {
     init(deviceStore: DeviceStore, controller: GoveeController) {
         self.deviceStore = deviceStore
         self.controller = controller
+        // Don't call setupMenuBar in init - defer bto after initialization
+    }
+    
+    func setup() {
         setupMenuBar()
     }
     
     private func setupMenuBar() {
+        // Ensure we're on the main thread
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.setupMenuBar()
+            }
+            return
+        }
+        
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         if let button = statusItem?.button {

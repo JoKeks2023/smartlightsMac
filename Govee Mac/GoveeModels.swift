@@ -284,7 +284,13 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
             
             browser = NetServiceBrowser()
             browser?.delegate = self
+            // Search for common smart light service types
+            // Govee, WLED, Hue (Bonjour), Lifx, and generic HTTP lights
             browser?.searchForServices(ofType: "_govee._tcp.", inDomain: "local.")
+            browser?.searchForServices(ofType: "_wled._tcp.", inDomain: "local.")
+            browser?.searchForServices(ofType: "_hap._tcp.", inDomain: "local.")
+            browser?.searchForServices(ofType: "_lifx._tcp.", inDomain: "local.")
+            browser?.searchForServices(ofType: "_http._tcp.", inDomain: "local.")
             
             Task {
                 try? await Task.sleep(for: .seconds(5))

@@ -287,6 +287,267 @@ struct ContentView: View {
     private func addToGroupContext(for device: GoveeDevice) -> some View { Menu("Add to group") { ForEach(deviceStore.groups) { group in Button(group.name) { addDevice(device.id, toGroup: group.id) } } } }
 }
 
+// MARK: - Device Discovery Sheet
+
+struct DeviceDiscoverySheet: View {
+    @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var deviceStore: DeviceStore
+    @EnvironmentObject private var controller: GoveeController
+    @Environment(\.dismiss) private var dismiss
+    @Binding var showManualAdd: Bool
+    
+    @State private var discoveredDevices: [GoveeDevice] = []
+    @State private var selectedDevices = Set<String>()
+    @State private var isDiscovering = false
+    @State private var discoveryStatus = "Bereit zum Suchen"
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Geräte hinzufügen").font(.title).bold()
+            Text("Suche nach Netzwerk- und HomeKit-Geräten").foregroundStyle(.secondary)
+            
+            Divider()
+            
+            HStack(spacing: 12) {
+                Button(action: { Task { await discoverAllDevices() } }) {
+                    HStack {
+                        if isDiscovering {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .frame(width: 16, height: 16)
+                        } else {
+                            Image(systemName: "magnifyingglass")
+                        }
+                        Text(isDiscovering ? "Suche läuft..." : "Geräte suchen")
+                    }
+                }
+                .disabled(isDiscovering)
+                
+                Spacer()
+                
+                Text(discoveryStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                Button(action: { 
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showManualAdd = true
+                    }
+                }) {
+                    Label("Manuelle IP", systemImage: "network")
+                }
+            }
+            
+            ScrollView {
+                if discoveredDevices.isEmpty && !isDiscovering {
+                    VStack(spacing: 16) {
+                        Image(systemName: "lightbulb.slash")
+                            .font(.system(size: 48))
+                            .foregroundStyle(.secondary)
+                        Text("Keine neuen Geräte gefunden")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        Text("Klicke auf 'Geräte suchen' um LAN-, HomeKit- und Cloud-Geräte zu finden.\nOder nutze 'Manuelle IP' für direkte Eingabe.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 300)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(discoveredDevices) { device in
+                            DeviceDiscoveryRow(
+                                device: device,
+                                isSelected: selectedDevices.contains(device.id),
+                                onToggle: { isSelected in
+                                    if isSelected {
+                                        selectedDevices.insert(device.id)
+                                    } else {
+                                        selectedDevices.remove(device.id)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+            }
+            .frame(height: 300)
+            
+            Divider()
+            
+            HStack {
+                if !discoveredDevices.isEmpty {
+                    Button("Alle auswählen") {
+                        selectedDevices = Set(discoveredDevices.map { $0.id })
+                    }
+                    .disabled(selectedDevices.count == discoveredDevices.count)
+                    
+                    Button("Keine") {
+                        selectedDevices.removeAll()
+                    }
+                    .disabled(selectedDevices.isEmpty)
+                }
+                
+                Spacer()
+                
+                Text("\(selectedDevices.count) ausgewählt")
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                
+                Button("Abbrechen") { dismiss() }
+                
+                Button("Hinzufügen (\(selectedDevices.count))") {
+                    addSelectedDevices()
+                    dismiss()
+                }
+                .disabled(selectedDevices.isEmpty)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 650, height: 520)
+    }
+    
+    private func discoverAllDevices() async {
+        isDiscovering = true
+        discoveredDevices = []
+        selectedDevices = []
+        discoveryStatus = "Suche läuft..."
+        
+        var allDevices: [GoveeDevice] = []
+        
+        // Cloud discovery
+        if !settings.goveeApiKey.isEmpty {
+            discoveryStatus = "Suche Cloud-Geräte..."
+            if let cloudDevices = await discoverCloud() {
+                allDevices.append(contentsOf: cloudDevices)
+            }
+        }
+        
+        // HomeKit discovery
+        if settings.homeKitEnabled {
+            discoveryStatus = "Suche HomeKit-Geräte..."
+            let homeKitDevices = await discoverHomeKit()
+            allDevices.append(contentsOf: homeKitDevices)
+        }
+        
+        // LAN discovery
+        discoveryStatus = "Suche LAN-Geräte..."
+        if let lanDevices = await discoverLAN() {
+            allDevices.append(contentsOf: lanDevices)
+        }
+        
+        // Filter out devices already in the store
+        let existingIDs = Set(deviceStore.devices.map { $0.id })
+        discoveredDevices = allDevices.filter { !existingIDs.contains($0.id) }
+        
+        isDiscovering = false
+        discoveryStatus = discoveredDevices.isEmpty ? "Keine neuen Geräte" : "\(discoveredDevices.count) Geräte gefunden"
+    }
+    
+    private func discoverCloud() async -> [GoveeDevice]? {
+        do {
+            let discovery = CloudDiscovery(apiKey: settings.goveeApiKey)
+            return try await discovery.refreshDevices()
+        } catch {
+            print("Cloud discovery error: \(error)")
+            return nil
+        }
+    }
+    
+    private func discoverLAN() async -> [GoveeDevice]? {
+        do {
+            let discovery = LANDiscovery()
+            return try await discovery.refreshDevices()
+        } catch {
+            print("LAN discovery error: \(error)")
+            return nil
+        }
+    }
+    
+    private func discoverHomeKit() async -> [GoveeDevice] {
+        #if canImport(HomeKit)
+        let manager = HomeKitManager()
+        return await manager.discoverDevices()
+        #else
+        return []
+        #endif
+    }
+    
+    private func addSelectedDevices() {
+        for deviceID in selectedDevices {
+            if let device = discoveredDevices.first(where: { $0.id == deviceID }) {
+                deviceStore.upsert(device)
+            }
+        }
+        if let firstID = selectedDevices.first {
+            deviceStore.selectedDeviceID = firstID
+            deviceStore.selectedGroupID = nil
+        }
+    }
+}
+
+struct DeviceDiscoveryRow: View {
+    let device: GoveeDevice
+    let isSelected: Bool
+    let onToggle: (Bool) -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(device.name)
+                    .font(.headline)
+                HStack(spacing: 8) {
+                    if let model = device.model {
+                        Text(model)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    transportBadge
+                }
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: Binding(
+                get: { isSelected },
+                set: { onToggle($0) }
+            ))
+            .labelsHidden()
+        }
+        .padding(12)
+        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+    
+    private var transportBadge: some View {
+        let (text, colors): (String, [Color]) = {
+            if device.transports.contains(.lan) { return ("LAN", [.green, .mint]) }
+            if device.transports.contains(.homeKit) { return ("HomeKit", [.orange, .yellow]) }
+            if device.transports.contains(.cloud) { return ("Cloud", [.blue, .cyan]) }
+            if device.transports.contains(.homeAssistant) { return ("Home Assistant", [.purple, .pink]) }
+            return ("Unbekannt", [.gray, .gray])
+        }()
+        
+        return Text(text)
+            .font(.caption2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                LinearGradient(
+                    colors: colors.map { $0.opacity(0.2) },
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
     var body: some View {
@@ -355,3 +616,4 @@ struct WelcomeView: View {
         .environmentObject(store)
         .environmentObject(GoveeController(deviceStore: store, settings: settings))
 }
+@available(macOS 14.0, *

@@ -34,7 +34,11 @@ struct Govee_MacApp: App {
                         .environmentObject(deviceStore)
                         .environmentObject(controller)
                 }
-                .task { 
+                .task {
+                    // Setup menu bar on the main actor after the window is ready
+                    await MainActor.run {
+                        menuBarController.setup()
+                    }
                     await controller.refresh()
                 }
                 .onChange(of: deviceStore.devices) { _ in
