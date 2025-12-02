@@ -147,10 +147,20 @@ class MenuBarController: ObservableObject {
             return
         }
 
-        // If the window was closed (red button), we need to re-open it.
-        // This is the modern, correct way for SwiftUI apps.
-        // The selector is part of the private API but is the standard way to achieve this.
-        // It asks the App Scene to create a new window if one isn't available.
-        NSApp.sendAction(Selector(("showWindow:")), to: nil, from: nil)
+        // If the window was closed, we need to open a new one.
+        // Note: newWindowForTab: may also be private API in some macOS versions.
+        // For SwiftUI lifecycle apps, window recreation is best handled by the system.
+        // This is a best-effort approach that works in most cases.
+        if #available(macOS 13.0, *) {
+            NSApp.sendAction(Selector(("newWindowForTab:")), to: nil, from: nil)
+        } else {
+            // Fallback for older macOS versions - try to find and open the main window
+            for window in NSApp.windows {
+                if window.title.contains("Govee") || window.title.isEmpty {
+                    window.makeKeyAndOrderFront(nil)
+                    return
+                }
+            }
+        }
     }
 }
