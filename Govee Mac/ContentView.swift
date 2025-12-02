@@ -217,6 +217,8 @@ struct ContentView: View {
         let parts = ip.split(separator: ".")
         guard parts.count == 4 else { return false }
         return parts.allSatisfy { part in
+            // Reject leading zeros except for "0" itself
+            if part.count > 1 && part.first == "0" { return false }
             guard let num = Int(part), num >= 0, num <= 255 else { return false }
             return true
         }

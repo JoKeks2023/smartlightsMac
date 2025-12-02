@@ -4,7 +4,21 @@ import Foundation
 struct StubDiscovery: DeviceDiscoveryProtocol {
     func refreshDevices() async throws -> [GoveeDevice] {
         return [
-            .init(id: "demo-1", name: "Demo Lamp", model: "H6001", ipAddress: "192.168.1.50", online: true, supportsBrightness: true, supportsColor: true, supportsColorTemperature: true, transports: [.lan], isOn: nil, brightness: nil, color: nil, colorTemperature: nil)
+            GoveeDevice(
+                id: "demo-1",
+                name: "Demo Lamp",
+                model: "H6001",
+                ipAddress: "192.168.1.50",
+                online: true,
+                supportsBrightness: true,
+                supportsColor: true,
+                supportsColorTemperature: true,
+                transports: [.lan],
+                isOn: nil,
+                brightness: nil,
+                color: nil,
+                colorTemperature: nil
+            )
         ]
     }
 }

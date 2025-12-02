@@ -148,8 +148,9 @@ class MenuBarController: ObservableObject {
         }
 
         // If the window was closed, we need to open a new one.
-        // For SwiftUI apps, we need to use NSApp.sendAction to open a new window.
-        // This is the proper way to create a new window in a SwiftUI lifecycle app.
+        // Note: newWindowForTab: may also be private API in some macOS versions.
+        // For SwiftUI lifecycle apps, window recreation is best handled by the system.
+        // This is a best-effort approach that works in most cases.
         if #available(macOS 13.0, *) {
             NSApp.sendAction(Selector(("newWindowForTab:")), to: nil, from: nil)
         } else {

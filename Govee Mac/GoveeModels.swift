@@ -536,12 +536,7 @@ struct HomeAssistantDiscovery: DeviceDiscoveryProtocol {
                     let state = obj["state"] as? String
                     let isOn = state == "on"
                     let brightness = attr["brightness"] as? Int
-                    let brightnessPercent: Int?
-                    if let b = brightness {
-                        brightnessPercent = Int(Double(b) / 255.0 * 100.0)
-                    } else {
-                        brightnessPercent = nil
-                    }
+                    let brightnessPercent = brightness.map { Int(Double($0) / 255.0 * 100.0) }
                     
                     devices.append(GoveeDevice(
                         id: entityId,
