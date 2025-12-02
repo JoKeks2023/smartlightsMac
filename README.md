@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="https://img.shields.io/badge/Platform-macOS%2013.7+-blue.svg" alt="Platform">
-  <img src="https://img.shields.io/badge/Swift-5.9-orange.svg" alt="Swift">
+  <img src="https://img.shields.io/badge/Swift-5.0-orange.svg" alt="Swift">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
 </div>
 
@@ -36,7 +36,7 @@ A powerful, native macOS app to control your Govee smart lights with support for
 
 ### Prerequisites
 - macOS 13.7 (Ventura) or later
-- Xcode 15.0 or later
+- Xcode 15.2 or later (or Xcode 15.0 minimum)
 - Free Apple ID (no paid developer account needed!)
 
 ### Installation
@@ -171,6 +171,10 @@ xcodebuild -project "Govee Mac.xcodeproj" \
   CODE_SIGNING_ALLOWED=NO \
   build
 ```
+
+## 💭 Developer Note
+
+I'm sorry for not using the latest Xcode and Swift versions in this project. I can't afford a new Mac right now, so I'm working with what I have. The app is built with Xcode 15.2 and Swift 5.0, which are slightly older than the latest releases, but everything still works great! If you have a newer setup, feel free to upgrade the project settings—it should be compatible.
 
 ## 🐛 Known Limitations
 
