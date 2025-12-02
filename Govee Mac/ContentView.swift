@@ -616,4 +616,3 @@ struct WelcomeView: View {
         .environmentObject(store)
         .environmentObject(GoveeController(deviceStore: store, settings: settings))
 }
-@available(macOS 14.0, *

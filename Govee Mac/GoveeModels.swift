@@ -355,7 +355,10 @@ struct LANControl: DeviceControlProtocol {
     let deviceIP: String
     
     private func sendLANCommand(cmd: [String: Any]) async throws {
-        var request = URLRequest(url: URL(string: "http://\(deviceIP)/device/control")!)
+        guard let url = URL(string: "http://\(deviceIP)/device/control") else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["msg": ["cmd": cmd]])
