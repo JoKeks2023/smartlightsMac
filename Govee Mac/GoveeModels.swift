@@ -6,6 +6,49 @@ import Security
 import HomeKit
 #endif
 
+// MARK: - Keychain Helper
+
+enum APIKeyKeychain {
+    private static let service = "com.govee.mac.api"
+    private static let account = "goveeApiKey"
+
+    static func save(key: String) throws {
+        let data = Data(key.utf8)
+        // Delete existing item if any
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        SecItemDelete(query as CFDictionary)
+
+        var attrs = query
+        attrs[kSecValueData as String] = data
+        attrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        let status = SecItemAdd(attrs as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [NSLocalizedDescriptionKey: "Keychain save failed: \(status)"])
+        }
+    }
+
+    static func load() throws -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = result as? Data else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [NSLocalizedDescriptionKey: "Keychain load failed: \(status)"])
+        }
+        return String(data: data, encoding: .utf8)
+    }
+}
+
 // MARK: - Models
 
 enum TransportKind: String, Codable, Hashable {
@@ -257,18 +300,25 @@ actor LANServiceStore {
     }
 }
 
-@MainActor
 class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate, NetServiceDelegate {
     private var browser: NetServiceBrowser?
     private let serviceStore = LANServiceStore()
     private var continuation: CheckedContinuation<[GoveeDevice], Error>?
+
+    private func takeContinuation() -> CheckedContinuation<[GoveeDevice], Error>? {
+        let cont = continuation
+        continuation = nil
+        return cont
+    }
     
     override init() {
         super.init()
     }
     
     deinit {
-        cleanup()
+        Task { [weak self] in
+            await MainActor.run { self?.cleanup() }
+        }
     }
     
     private func cleanup() {
@@ -278,42 +328,52 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
     }
 
     func refreshDevices() async throws -> [GoveeDevice] {
-        return try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { [weak self] continuation in
+            guard let self = self else {
+                continuation.resume(returning: [])
+                return
+            }
             self.continuation = continuation
-            Task { await self.serviceStore.reset() }
-            
-            browser = NetServiceBrowser()
-            browser?.delegate = self
+
+            Task { [weak self] in
+                guard let self = self else { return }
+                await self.serviceStore.reset()
+            }
+
+            self.browser = NetServiceBrowser()
+            self.browser?.delegate = self
             // Search for common smart light service types
             // Govee, WLED, Hue (Bonjour), Lifx, and generic HTTP lights
-            browser?.searchForServices(ofType: "_govee._tcp.", inDomain: "local.")
-            browser?.searchForServices(ofType: "_wled._tcp.", inDomain: "local.")
-            browser?.searchForServices(ofType: "_hap._tcp.", inDomain: "local.")
-            browser?.searchForServices(ofType: "_lifx._tcp.", inDomain: "local.")
-            browser?.searchForServices(ofType: "_http._tcp.", inDomain: "local.")
-            
-            Task {
+            self.browser?.searchForServices(ofType: "_govee._tcp.", inDomain: "local.")
+            self.browser?.searchForServices(ofType: "_wled._tcp.", inDomain: "local.")
+            self.browser?.searchForServices(ofType: "_hap._tcp.", inDomain: "local.")
+            self.browser?.searchForServices(ofType: "_lifx._tcp.", inDomain: "local.")
+            self.browser?.searchForServices(ofType: "_http._tcp.", inDomain: "local.")
+
+            Task { [weak self] in
                 try? await Task.sleep(for: .seconds(5))
-                self.browser?.stop()
-                self.browser?.delegate = nil
-                if let cont = self.continuation {
+                guard let self = self else { return }
+                await MainActor.run {
+                    self.browser?.stop()
+                    self.browser?.delegate = nil
+                }
+                if let cont = self.takeContinuation() {
                     let devices = await self.serviceStore.resolvedDevices
                     cont.resume(returning: devices)
-                    self.continuation = nil
                 }
             }
         }
     }
     
-    // Handle delegate callbacks on the main actor to avoid Sendable violations
-    @MainActor
+    // Handle delegate callbacks and ensure resolve runs on the main thread
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-        // Do not pass NetService into actor; resolve immediately on main actor
-        service.delegate = self
-        service.resolve(withTimeout: 3.0)
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            service.delegate = self
+            service.resolve(withTimeout: 3.0)
+        }
     }
     
-    @MainActor
     func netServiceDidResolveAddress(_ sender: NetService) {
         guard let addresses = sender.addresses, !addresses.isEmpty,
               let ipAddress = self.extractIPAddress(from: addresses[0]) else { return }
@@ -345,7 +405,6 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
         return String(cString: hostname)
     }
     
-    @MainActor
     func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
         // Ignore resolution failures
     }
@@ -437,9 +496,9 @@ class HomeKitManager: NSObject, ObservableObject, HMHomeManagerDelegate {
     }
     
     nonisolated func homeManagerDidUpdateHomes(_ manager: HMHomeManager) {
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
             if let home = manager.primaryHome {
-                accessories = home.accessories
+                self?.accessories = home.accessories
             }
         }
     }
@@ -811,3 +870,4 @@ class GoveeController: ObservableObject {
         }
     }
 }
+

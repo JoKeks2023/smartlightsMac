@@ -164,7 +164,7 @@ class MenuBarController: ObservableObject {
         // For SwiftUI lifecycle apps, window recreation is best handled by the system.
         // This is a best-effort approach that works in most cases.
         if #available(macOS 13.0, *) {
-            NSApp.sendAction(Selector(("newWindowForTab:")), to: nil, from: nil)
+            NSApp.sendAction(#selector(NSResponder.newWindowForTab(_:)), to: nil, from: nil)
         } else {
             // Fallback for older macOS versions - try to find and open the main window
             for window in NSApp.windows {
