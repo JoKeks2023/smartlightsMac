@@ -271,17 +271,34 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] HomeKit integration (supports Philips Hue, LIFX, Nanoleaf, etc.)
 - [x] Home Assistant integration (supports all manufacturers)
 - [x] Multi-manufacturer support
+- [x] iOS companion app bridge (CloudKit + App Groups sync)
 
 ### Planned Enhancements
 - [ ] Native Philips Hue Bridge API (direct control without HomeKit/HA)
 - [ ] LIFX LAN protocol implementation
+- [ ] iOS companion app UI (bridge infrastructure ready)
 - [ ] Scenes and automation support
 - [ ] Custom color presets
 - [ ] Schedule/timer functionality
 - [ ] Music sync integration
 - [ ] Multi-window support
 - [ ] Shortcuts app integration
-- [ ] iCloud sync for groups
+
+## 📱 iOS Companion App
+
+The macOS app now includes a complete bridge infrastructure for iOS companion app development:
+
+- **App Groups** - Instant local data sharing between macOS and iOS
+- **CloudKit Sync** - Cross-device synchronization via iCloud
+- **Shared Models** - Device and group data structures ready for iOS
+
+See [IOS_COMPANION_GUIDE.md](IOS_COMPANION_GUIDE.md) for complete integration instructions.
+
+**Quick Start for iOS Developers:**
+1. Create new iOS project with same App Group ID (`group.com.govee.mac`)
+2. Copy shared models (`GoveeModels.swift`, `CloudSyncManager.swift`)
+3. Load devices from App Groups for instant sync
+4. Optionally enable CloudKit for multi-device sync
 
 ## ⭐ Star History
 

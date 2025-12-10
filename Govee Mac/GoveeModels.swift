@@ -357,8 +357,13 @@ final class DeviceStore: ObservableObject {
     @Published var selectedDeviceID: String?
     @Published var selectedGroupID: String?
     @Published var groups: [DeviceGroup] = [] {
-        didSet { saveGroups() }
+        didSet { 
+            saveGroups()
+            CloudSyncManager.shared.saveGroupsToAppGroups(groups)
+        }
     }
+    
+    private let syncManager = CloudSyncManager.shared
     
     init() { loadGroups() }
     
@@ -376,10 +381,24 @@ final class DeviceStore: ObservableObject {
     }
     
     private func saveDevicesToSharedContainer() {
-        if let sharedDefaults = UserDefaults(suiteName: "group.com.govee.mac"),
-           let encoded = try? JSONEncoder().encode(devices) {
-            sharedDefaults.set(encoded, forKey: "cachedDevices")
-        }
+        // Save to App Groups via CloudSyncManager
+        syncManager.saveDevicesToAppGroups(devices)
+    }
+    
+    /// Sync devices and groups to iCloud (optional)
+    func syncToCloud() async throws {
+        try await syncManager.performFullSync(devices: devices, groups: groups)
+    }
+    
+    /// Load devices from iCloud (optional)
+    func loadFromCloud() async throws {
+        let cloudDevices = try await syncManager.fetchDevicesFromCloud()
+        let cloudGroups = try await syncManager.fetchGroupsFromCloud()
+        
+        devices = cloudDevices
+        groups = cloudGroups
+        saveDevicesToSharedContainer()
+        saveGroups()
     }
     
     func addGroup(name: String, memberIDs: [String]) {
