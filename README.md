@@ -389,6 +389,7 @@ try await controlClient.createGroup(name: "Living Room", memberIDs: ["123", "456
   - Syncs via iCloud (CloudKit) and App Groups
   - Native SwiftUI design
   - Works seamlessly with this macOS app
+  - **[Connection Guide](COMPANION_APP_CONNECTION.md)** - How the apps work together
 
 ### Integration Partners
 
