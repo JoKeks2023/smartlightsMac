@@ -4,9 +4,15 @@
   <img src="https://img.shields.io/badge/Platform-macOS%2013.7+-blue.svg" alt="Platform">
   <img src="https://img.shields.io/badge/Swift-5.0-orange.svg" alt="Swift">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+  <br>
+  <a href="https://github.com/JoKeks2023/smartlightsMac-ios-companion">
+    <img src="https://img.shields.io/badge/📱_iOS_Companion_App-Available-brightgreen.svg" alt="iOS Companion">
+  </a>
 </div>
 
 A powerful, native macOS app to control your smart lights with support for **multiple manufacturers** including Govee, Philips Hue, LIFX, and more. Supports multiple protocols: Cloud API, LAN (local network), HomeKit/Matter, and Home Assistant.
+
+> **📱 iOS Companion App**: Control your lights from your iPhone! Check out the [iOS Companion App](https://github.com/JoKeks2023/smartlightsMac-ios-companion) that syncs with this Mac app via CloudKit and App Groups.
 
 ## ✨ Features
 
@@ -287,15 +293,37 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📱 iOS Companion App - Complete Infrastructure
 
-The macOS app now includes **complete infrastructure** for iOS companion app development with **full control capabilities**:
+### 🎉 iOS App Available Now!
 
-### Three Sync Methods
+**[📱 SmartLights iOS Companion App →](https://github.com/JoKeks2023/smartlightsMac-ios-companion)**
+
+The iOS companion app is ready to use! It provides a beautiful mobile interface to control your smart lights managed by this Mac app.
+
+**Key Features:**
+- 📱 **Remote Control**: Full device control from your iPhone
+- ☁️ **iCloud Sync**: Automatic sync across all your devices
+- 🔄 **Local Sync**: Instant sync via App Groups on the same device
+- 🎨 **Full Controls**: Power, brightness, RGB color, color temperature
+- 👥 **Device Groups**: Organize and control multiple devices together
+
+**Get Started:**
+1. Visit the [iOS Companion Repository](https://github.com/JoKeks2023/smartlightsMac-ios-companion)
+2. Clone and build the iOS app in Xcode
+3. Launch both apps - they'll automatically sync!
+
+---
+
+### For iOS Developers
+
+The macOS app includes **complete infrastructure** for iOS companion app development with **full control capabilities**:
+
+#### Three Sync Methods
 - ☁️ **CloudKit** - Internet-based sync (works anywhere)
 - 📡 **Local Network** - Fast sync over WiFi (< 100ms latency)
 - 📶 **Bluetooth** - Close proximity sync (works offline)
 - 📦 **App Groups** - Instant same-device sharing
 
-### Full Control API
+#### Full Control API
 iOS app can control **everything**:
 - ✅ Device power, brightness, color, color temperature
 - ✅ Group creation, management, and control
@@ -303,7 +331,7 @@ iOS app can control **everything**:
 - ✅ Trigger device discovery from macOS app
 - ✅ Real-time bidirectional sync
 
-### Developer Resources
+#### Developer Resources
 
 **📘 [IOS_BRIDGE_DEVELOPER_GUIDE.md](IOS_BRIDGE_DEVELOPER_GUIDE.md)** - Complete guide (1000+ lines)
 - Step-by-step setup instructions
@@ -318,7 +346,7 @@ iOS app can control **everything**:
 - Sync method details
 - Connection management
 
-### Quick Start for iOS Developers
+#### Quick Start for iOS Developers
 
 ```swift
 // 1. Copy 4 files to iOS project
@@ -351,6 +379,23 @@ try await controlClient.createGroup(name: "Living Room", memberIDs: ["123", "456
 ```
 
 **Ready to build in under a day** with the complete guide and code examples!
+
+## 🔗 Related Projects
+
+### Official Companion Apps
+
+- **[📱 SmartLights iOS Companion](https://github.com/JoKeks2023/smartlightsMac-ios-companion)** - Remote control your lights from iPhone
+  - Full device control interface
+  - Syncs via iCloud (CloudKit) and App Groups
+  - Native SwiftUI design
+  - Works seamlessly with this macOS app
+
+### Integration Partners
+
+- **[Govee Developer API](https://developer.govee.com)** - Official Govee API documentation
+- **[Home Assistant](https://home-assistant.io)** - Universal smart home platform
+- **[Philips Hue](https://developers.meethue.com)** - Hue Bridge API documentation
+- **[WLED](https://kno.wled.ge)** - LED controller firmware
 
 ## ⭐ Star History
 

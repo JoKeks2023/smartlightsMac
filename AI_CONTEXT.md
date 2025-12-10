@@ -39,6 +39,7 @@ Govee Mac (also known as SmartlightsMac) is a **native macOS application** for c
 - **Development Tool**: Xcode 15.2+
 - **License**: MIT
 - **Repository**: https://github.com/JoKeks2023/smartlightsMac
+- **iOS Companion**: https://github.com/JoKeks2023/smartlightsMac-ios-companion
 
 ### Primary Goals
 
@@ -1644,11 +1645,14 @@ See `CONTRIBUTING.md` for detailed guidelines.
 
 **Repository**: https://github.com/JoKeks2023/smartlightsMac
 
+**iOS Companion Repository**: https://github.com/JoKeks2023/smartlightsMac-ios-companion
+
 **Author**: JoKeks2023
 
 **License**: MIT License (see `LICENSE` file)
 
 **Related Projects**:
+- **iOS Companion App**: https://github.com/JoKeks2023/smartlightsMac-ios-companion - Official iOS remote control app
 - Govee: https://www.govee.com
 - Govee Developer API: https://developer.govee.com
 - Home Assistant: https://home-assistant.io
