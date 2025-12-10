@@ -6,6 +6,7 @@ import Foundation
 struct ContentView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var deviceStore: DeviceStore
+    @EnvironmentObject private var profileStore: DMXProfileStore
     @EnvironmentObject private var controller: GoveeController
 
     @State private var showSettings = false
@@ -47,6 +48,7 @@ struct ContentView: View {
             if let device = dmxConfigDevice {
                 DMXConfigSheet(device: device)
                     .environmentObject(deviceStore)
+                    .environmentObject(profileStore)
                     .environmentObject(settings)
             }
         }
@@ -664,6 +666,7 @@ struct WelcomeView: View {
 
 struct DMXConfigSheet: View {
     @EnvironmentObject private var deviceStore: DeviceStore
+    @EnvironmentObject private var profileStore: DMXProfileStore
     @EnvironmentObject private var settings: SettingsStore
     @Environment(\.dismiss) private var dismiss
     
@@ -671,13 +674,15 @@ struct DMXConfigSheet: View {
     
     @State private var universe: Int
     @State private var startChannel: Int
-    @State private var channelMode: DMXChannelMapping.DMXChannelMode
+    @State private var selectedProfileID: String
+    @State private var showCustomProfileEditor = false
+    @State private var showProfileManager = false
     
     init(device: GoveeDevice) {
         self.device = device
         _universe = State(initialValue: device.dmxMapping?.universe ?? 0)
         _startChannel = State(initialValue: device.dmxMapping?.startChannel ?? 1)
-        _channelMode = State(initialValue: device.dmxMapping?.channelMode ?? .rgb)
+        _selectedProfileID = State(initialValue: device.dmxMapping?.profileID ?? "builtin_rgbDimmer")
     }
     
     var body: some View {
@@ -687,40 +692,66 @@ struct DMXConfigSheet: View {
                 .bold()
             
             Form {
-                Section(header: Text("DMX Settings")) {
+                Section(header: Text("DMX Address")) {
                     Stepper("Universe: \(universe)", value: $universe, in: 0...32767)
-                    
                     Stepper("Start Channel: \(startChannel)", value: $startChannel, in: 1...512)
-                    
-                    Picker("Channel Mode", selection: $channelMode) {
-                        Text("Single Dimmer (1 ch)").tag(DMXChannelMapping.DMXChannelMode.single)
-                        Text("RGB (3 ch)").tag(DMXChannelMapping.DMXChannelMode.rgb)
-                        Text("RGBW (4 ch)").tag(DMXChannelMapping.DMXChannelMode.rgbw)
-                        Text("RGBA (4 ch)").tag(DMXChannelMapping.DMXChannelMode.rgba)
-                        Text("RGB + Dimmer (4 ch)").tag(DMXChannelMapping.DMXChannelMode.rgbDimmer)
-                        Text("Extended (6+ ch)").tag(DMXChannelMapping.DMXChannelMode.extended)
-                    }
-                    .pickerStyle(.menu)
                 }
                 
-                Section(header: Text("Channel Layout")) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(channelLayoutDescription)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        HStack {
-                            Text("Channels used:")
-                                .font(.caption)
-                            Text("\(startChannel) - \(endChannel)")
-                                .font(.caption)
-                                .fontWeight(.bold)
+                Section(header: Text("DMX Profile")) {
+                    Picker("Profile", selection: $selectedProfileID) {
+                        ForEach(profileStore.allProfiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    
+                    HStack {
+                        Button("Create Custom Profile") {
+                            showCustomProfileEditor = true
                         }
                         
-                        if endChannel > 512 {
-                            Text("⚠️ Warning: End channel exceeds DMX universe limit (512)")
-                                .font(.caption)
-                                .foregroundColor(.red)
+                        Button("Manage Profiles") {
+                            showProfileManager = true
+                        }
+                    }
+                }
+                
+                if let profile = profileStore.getProfile(id: selectedProfileID) {
+                    Section(header: Text("Channel Layout")) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(profile.channels) { channel in
+                                HStack {
+                                    Text("Ch \(startChannel + channel.channelNumber):")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .frame(width: 60, alignment: .leading)
+                                    Text(channel.function.rawValue)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            HStack {
+                                Text("Total Channels:")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                Text("\(profile.channelCount)")
+                                    .font(.caption)
+                                Spacer()
+                                Text("Range:")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                Text("\(startChannel) - \(endChannel(profile: profile))")
+                                    .font(.caption)
+                            }
+                            
+                            if endChannel(profile: profile) > 512 {
+                                Text("⚠️ Warning: End channel exceeds DMX universe limit (512)")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
                         }
                     }
                 }
@@ -738,7 +769,7 @@ struct DMXConfigSheet: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .frame(height: 400)
+            .frame(height: 450)
             
             HStack {
                 Button("Cancel") { dismiss() }
@@ -758,42 +789,26 @@ struct DMXConfigSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 500)
-    }
-    
-    private var channelLayoutDescription: String {
-        switch channelMode {
-        case .single:
-            return "Ch\(startChannel): Dimmer/Brightness"
-        case .rgb:
-            return "Ch\(startChannel): Red, Ch\(startChannel+1): Green, Ch\(startChannel+2): Blue"
-        case .rgbw:
-            return "Ch\(startChannel): Red, Ch\(startChannel+1): Green, Ch\(startChannel+2): Blue, Ch\(startChannel+3): White"
-        case .rgba:
-            return "Ch\(startChannel): Red, Ch\(startChannel+1): Green, Ch\(startChannel+2): Blue, Ch\(startChannel+3): Amber"
-        case .rgbDimmer:
-            return "Ch\(startChannel): Dimmer, Ch\(startChannel+1): Red, Ch\(startChannel+2): Green, Ch\(startChannel+3): Blue"
-        case .extended:
-            return "Ch\(startChannel): Dimmer, Ch\(startChannel+1): Red, Ch\(startChannel+2): Green, Ch\(startChannel+3): Blue, Ch\(startChannel+4): White, Ch\(startChannel+5): Amber"
+        .frame(width: 550)
+        .sheet(isPresented: $showCustomProfileEditor) {
+            CustomProfileEditor(profileStore: profileStore)
+                .environmentObject(profileStore)
+        }
+        .sheet(isPresented: $showProfileManager) {
+            ProfileManagerView()
+                .environmentObject(profileStore)
         }
     }
     
-    private var endChannel: Int {
-        let channelCount: Int
-        switch channelMode {
-        case .single: channelCount = 1
-        case .rgb: channelCount = 3
-        case .rgbw, .rgba, .rgbDimmer: channelCount = 4
-        case .extended: channelCount = 6
-        }
-        return startChannel + channelCount - 1
+    private func endChannel(profile: DMXProfile) -> Int {
+        startChannel + profile.channelCount - 1
     }
     
     private func saveDMXMapping() {
         let mapping = DMXChannelMapping(
             universe: universe,
             startChannel: startChannel,
-            channelMode: channelMode
+            profileID: selectedProfileID
         )
         
         if let index = deviceStore.devices.firstIndex(where: { $0.id == device.id }) {
@@ -814,11 +829,192 @@ struct DMXConfigSheet: View {
     }
 }
 
+// MARK: - Custom Profile Editor
+
+struct CustomProfileEditor: View {
+    @EnvironmentObject private var profileStore: DMXProfileStore
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var profileName: String = ""
+    @State private var channels: [DMXCustomChannel] = [
+        DMXCustomChannel(channelNumber: 0, function: .dimmer)
+    ]
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Create Custom DMX Profile")
+                .font(.title2)
+                .bold()
+            
+            Form {
+                Section(header: Text("Profile Name")) {
+                    TextField("Profile Name", text: $profileName)
+                        .textFieldStyle(.roundedBorder)
+                }
+                
+                Section(header: HStack {
+                    Text("Channel Mapping")
+                    Spacer()
+                    Button(action: addChannel) {
+                        Label("Add Channel", systemImage: "plus.circle")
+                    }
+                }) {
+                    if channels.isEmpty {
+                        Text("No channels defined")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding()
+                    } else {
+                        ForEach(channels.indices, id: \.self) { index in
+                            HStack(spacing: 12) {
+                                Text("Ch \(index + 1):")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .frame(width: 50, alignment: .leading)
+                                
+                                Picker("Function", selection: $channels[index].function) {
+                                    ForEach(DMXChannelFunction.allCases, id: \.self) { function in
+                                        Text(function.rawValue).tag(function)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 120)
+                                
+                                Spacer()
+                                
+                                Button(action: { deleteChannel(at: index) }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+            .frame(height: 400)
+            
+            HStack {
+                Button("Cancel") { dismiss() }
+                Spacer()
+                Button("Create Profile") {
+                    createProfile()
+                    dismiss()
+                }
+                .disabled(profileName.trimmingCharacters(in: .whitespaces).isEmpty || channels.isEmpty)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 500)
+    }
+    
+    private func addChannel() {
+        let nextChannel = channels.count
+        channels.append(DMXCustomChannel(channelNumber: nextChannel, function: .unused))
+    }
+    
+    private func deleteChannel(at index: Int) {
+        channels.remove(at: index)
+        // Renumber channels
+        for i in 0..<channels.count {
+            channels[i].channelNumber = i
+        }
+    }
+    
+    private func createProfile() {
+        let profile = DMXProfile(
+            name: profileName,
+            channels: channels,
+            isBuiltIn: false
+        )
+        profileStore.addProfile(profile)
+    }
+}
+
+// MARK: - Profile Manager
+
+struct ProfileManagerView: View {
+    @EnvironmentObject private var profileStore: DMXProfileStore
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Manage DMX Profiles")
+                .font(.title2)
+                .bold()
+            
+            List {
+                Section(header: Text("Built-in Profiles")) {
+                    ForEach(DMXProfile.builtInProfiles) { profile in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(profile.name)
+                                    .font(.headline)
+                                Text("\(profile.channelCount) channels")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "lock.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                
+                Section(header: Text("Custom Profiles")) {
+                    if profileStore.customProfiles.isEmpty {
+                        Text("No custom profiles")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding()
+                    } else {
+                        ForEach(profileStore.customProfiles) { profile in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(profile.name)
+                                        .font(.headline)
+                                    Text("\(profile.channelCount) channels")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    
+                                    // Show channel functions
+                                    Text(profile.channels.map { $0.function.rawValue }.joined(separator: ", "))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Button(action: { profileStore.deleteProfile(id: profile.id) }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(height: 400)
+            
+            Button("Done") { dismiss() }
+                .keyboardShortcut(.defaultAction)
+        }
+        .padding(24)
+        .frame(width: 500)
+    }
+}
+
 #Preview {
     let settings = SettingsStore()
     let store = DeviceStore()
+    let profiles = DMXProfileStore()
     return WelcomeView()
         .environmentObject(settings)
         .environmentObject(store)
-        .environmentObject(GoveeController(deviceStore: store, settings: settings))
+        .environmentObject(profiles)
+        .environmentObject(GoveeController(deviceStore: store, settings: settings, profileStore: profiles))
 }

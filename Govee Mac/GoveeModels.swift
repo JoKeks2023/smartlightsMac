@@ -66,10 +66,124 @@ struct DeviceColor: Codable, Hashable {
     var b: Int
 }
 
+enum DMXChannelFunction: String, Codable, CaseIterable {
+    case dimmer = "Dimmer"
+    case red = "Red"
+    case green = "Green"
+    case blue = "Blue"
+    case white = "White"
+    case amber = "Amber"
+    case strobe = "Strobe"
+    case unused = "Unused"
+}
+
+struct DMXCustomChannel: Codable, Hashable, Identifiable {
+    let id: UUID
+    var channelNumber: Int // Relative to start (0-based offset)
+    var function: DMXChannelFunction
+    
+    init(id: UUID = UUID(), channelNumber: Int, function: DMXChannelFunction) {
+        self.id = id
+        self.channelNumber = channelNumber
+        self.function = function
+    }
+}
+
+struct DMXProfile: Codable, Hashable, Identifiable {
+    let id: String
+    var name: String
+    var channels: [DMXCustomChannel]
+    var isBuiltIn: Bool
+    
+    init(id: String = UUID().uuidString, name: String, channels: [DMXCustomChannel], isBuiltIn: Bool = false) {
+        self.id = id
+        self.name = name
+        self.channels = channels
+        self.isBuiltIn = isBuiltIn
+    }
+    
+    var channelCount: Int {
+        channels.isEmpty ? 1 : (channels.map { $0.channelNumber }.max() ?? 0) + 1
+    }
+    
+    // Built-in profiles
+    static var builtInProfiles: [DMXProfile] {
+        [
+            DMXProfile(
+                id: "builtin_single",
+                name: "Single Dimmer (1 ch)",
+                channels: [
+                    DMXCustomChannel(channelNumber: 0, function: .dimmer)
+                ],
+                isBuiltIn: true
+            ),
+            DMXProfile(
+                id: "builtin_rgb",
+                name: "RGB (3 ch)",
+                channels: [
+                    DMXCustomChannel(channelNumber: 0, function: .red),
+                    DMXCustomChannel(channelNumber: 1, function: .green),
+                    DMXCustomChannel(channelNumber: 2, function: .blue)
+                ],
+                isBuiltIn: true
+            ),
+            DMXProfile(
+                id: "builtin_rgbw",
+                name: "RGBW (4 ch)",
+                channels: [
+                    DMXCustomChannel(channelNumber: 0, function: .red),
+                    DMXCustomChannel(channelNumber: 1, function: .green),
+                    DMXCustomChannel(channelNumber: 2, function: .blue),
+                    DMXCustomChannel(channelNumber: 3, function: .white)
+                ],
+                isBuiltIn: true
+            ),
+            DMXProfile(
+                id: "builtin_rgba",
+                name: "RGBA (4 ch)",
+                channels: [
+                    DMXCustomChannel(channelNumber: 0, function: .red),
+                    DMXCustomChannel(channelNumber: 1, function: .green),
+                    DMXCustomChannel(channelNumber: 2, function: .blue),
+                    DMXCustomChannel(channelNumber: 3, function: .amber)
+                ],
+                isBuiltIn: true
+            ),
+            DMXProfile(
+                id: "builtin_rgbDimmer",
+                name: "RGB + Dimmer (4 ch)",
+                channels: [
+                    DMXCustomChannel(channelNumber: 0, function: .dimmer),
+                    DMXCustomChannel(channelNumber: 1, function: .red),
+                    DMXCustomChannel(channelNumber: 2, function: .green),
+                    DMXCustomChannel(channelNumber: 3, function: .blue)
+                ],
+                isBuiltIn: true
+            ),
+            DMXProfile(
+                id: "builtin_extended",
+                name: "Extended RGBWA (6 ch)",
+                channels: [
+                    DMXCustomChannel(channelNumber: 0, function: .dimmer),
+                    DMXCustomChannel(channelNumber: 1, function: .red),
+                    DMXCustomChannel(channelNumber: 2, function: .green),
+                    DMXCustomChannel(channelNumber: 3, function: .blue),
+                    DMXCustomChannel(channelNumber: 4, function: .white),
+                    DMXCustomChannel(channelNumber: 5, function: .amber)
+                ],
+                isBuiltIn: true
+            )
+        ]
+    }
+}
+
 struct DMXChannelMapping: Codable, Hashable {
     var universe: Int
     var startChannel: Int // 1-512
-    var channelMode: DMXChannelMode
+    var profileID: String // Reference to DMXProfile
+    
+    // Legacy support - will be converted to custom profiles
+    var channelMode: DMXChannelMode?
     
     enum DMXChannelMode: String, Codable {
         case single      // Single channel dimmer (1 channel)
@@ -78,6 +192,29 @@ struct DMXChannelMapping: Codable, Hashable {
         case rgba        // RGBA (4 channels: R, G, B, Amber)
         case rgbDimmer   // RGB + Dimmer (4 channels: Dimmer, R, G, B)
         case extended    // Extended mode (Dimmer, R, G, B, W, Amber, etc.)
+    }
+    
+    init(universe: Int, startChannel: Int, profileID: String) {
+        self.universe = universe
+        self.startChannel = startChannel
+        self.profileID = profileID
+        self.channelMode = nil
+    }
+    
+    // Legacy initializer
+    init(universe: Int, startChannel: Int, channelMode: DMXChannelMode) {
+        self.universe = universe
+        self.startChannel = startChannel
+        self.channelMode = channelMode
+        // Map to built-in profile
+        switch channelMode {
+        case .single: self.profileID = "builtin_single"
+        case .rgb: self.profileID = "builtin_rgb"
+        case .rgbw: self.profileID = "builtin_rgbw"
+        case .rgba: self.profileID = "builtin_rgba"
+        case .rgbDimmer: self.profileID = "builtin_rgbDimmer"
+        case .extended: self.profileID = "builtin_extended"
+        }
     }
 }
 
@@ -151,6 +288,52 @@ final class SettingsStore: ObservableObject {
         self.dmxEnabled = UserDefaults.standard.object(forKey: "dmxEnabled") as? Bool ?? false
         let protocolString = UserDefaults.standard.string(forKey: "dmxProtocol") ?? DMXProtocolType.artnet.rawValue
         self.dmxProtocol = DMXProtocolType(rawValue: protocolString) ?? .artnet
+    }
+}
+
+@MainActor
+final class DMXProfileStore: ObservableObject {
+    @Published var customProfiles: [DMXProfile] = [] {
+        didSet { saveProfiles() }
+    }
+    
+    var allProfiles: [DMXProfile] {
+        DMXProfile.builtInProfiles + customProfiles
+    }
+    
+    init() {
+        loadProfiles()
+    }
+    
+    func getProfile(id: String) -> DMXProfile? {
+        allProfiles.first { $0.id == id }
+    }
+    
+    func addProfile(_ profile: DMXProfile) {
+        customProfiles.append(profile)
+    }
+    
+    func updateProfile(_ profile: DMXProfile) {
+        if let index = customProfiles.firstIndex(where: { $0.id == profile.id }) {
+            customProfiles[index] = profile
+        }
+    }
+    
+    func deleteProfile(id: String) {
+        customProfiles.removeAll { $0.id == id }
+    }
+    
+    private func saveProfiles() {
+        if let encoded = try? JSONEncoder().encode(customProfiles) {
+            UserDefaults.standard.set(encoded, forKey: "dmxCustomProfiles")
+        }
+    }
+    
+    private func loadProfiles() {
+        if let data = UserDefaults.standard.data(forKey: "dmxCustomProfiles"),
+           let decoded = try? JSONDecoder().decode([DMXProfile].self, from: data) {
+            customProfiles = decoded
+        }
     }
 }
 
@@ -884,107 +1067,84 @@ class DMXReceiver: ObservableObject {
         guard let controller = await MainActor.run(body: { controller }) else { return }
         
         let devices = await MainActor.run { controller.deviceStore.devices }
+        let profileStore = await MainActor.run { controller.profileStore }
         
         for device in devices {
             guard let mapping = device.dmxMapping,
                   mapping.universe == universe else { continue }
             
-            // Get channel values
-            let channelCount: Int
-            switch mapping.channelMode {
-            case .single: channelCount = 1
-            case .rgb: channelCount = 3
-            case .rgbw, .rgba, .rgbDimmer: channelCount = 4
-            case .extended: channelCount = 6
-            }
+            // Get profile
+            guard let profile = await MainActor.run(body: { profileStore.getProfile(id: mapping.profileID) }) else { continue }
             
+            // Get channel values
+            let channelCount = profile.channelCount
             let values = await universeManager.getChannelValues(universe, startChannel: mapping.startChannel, count: channelCount)
             guard !values.isEmpty else { continue }
             
-            // Apply to device based on channel mode
-            await applyDMXToDevice(device: device, mapping: mapping, values: values)
+            // Apply to device based on profile
+            await applyDMXToDevice(device: device, profile: profile, values: values)
         }
     }
     
-    private func applyDMXToDevice(device: GoveeDevice, mapping: DMXChannelMapping, values: [UInt8]) async {
+    private func applyDMXToDevice(device: GoveeDevice, profile: DMXProfile, values: [UInt8]) async {
         guard let controller = await MainActor.run(body: { controller }) else { return }
+        
+        // Extract values by function
+        var dimmerValue: UInt8? = nil
+        var redValue: UInt8 = 0
+        var greenValue: UInt8 = 0
+        var blueValue: UInt8 = 0
+        var whiteValue: UInt8 = 0
+        
+        for channel in profile.channels {
+            guard channel.channelNumber < values.count else { continue }
+            let value = values[channel.channelNumber]
+            
+            switch channel.function {
+            case .dimmer:
+                dimmerValue = value
+            case .red:
+                redValue = value
+            case .green:
+                greenValue = value
+            case .blue:
+                blueValue = value
+            case .white:
+                whiteValue = value
+            case .amber:
+                // Amber can be used as warmth or ignored
+                break
+            case .strobe, .unused:
+                // Ignore these functions
+                break
+            }
+        }
         
         await MainActor.run {
             Task {
-                switch mapping.channelMode {
-                case .single:
-                    // Single dimmer channel
-                    if values.count >= 1 {
-                        let brightness = Int(Double(values[0]) / 255.0 * 100.0)
-                        let isOn = values[0] > 0
-                        try? await controller.setDevicePower(device: device, on: isOn)
-                        if isOn {
-                            try? await controller.setDeviceBrightness(device: device, value: brightness)
-                        }
+                // Determine if light should be on
+                let hasColor = redValue > 0 || greenValue > 0 || blueValue > 0
+                let hasDimmer = dimmerValue ?? 0 > 0
+                let hasWhite = whiteValue > 0
+                let isOn = hasColor || hasDimmer || hasWhite
+                
+                try? await controller.setDevicePower(device: device, on: isOn)
+                
+                if isOn {
+                    // Set brightness if dimmer is present
+                    if let dimmer = dimmerValue {
+                        let brightness = Int(Double(dimmer) / 255.0 * 100.0)
+                        try? await controller.setDeviceBrightness(device: device, value: brightness)
+                    } else if whiteValue > 0 {
+                        // Use white as brightness if no dimmer
+                        let brightness = Int(Double(whiteValue) / 255.0 * 100.0)
+                        try? await controller.setDeviceBrightness(device: device, value: brightness)
                     }
                     
-                case .rgb:
-                    // RGB channels
-                    if values.count >= 3 {
-                        let color = DeviceColor(r: Int(values[0]), g: Int(values[1]), b: Int(values[2]))
-                        let isOn = values[0] > 0 || values[1] > 0 || values[2] > 0
-                        try? await controller.setDevicePower(device: device, on: isOn)
-                        if isOn {
-                            try? await controller.setDeviceColor(device: device, color: color)
-                        }
-                    }
-                    
-                case .rgbw:
-                    // RGBW channels
-                    if values.count >= 4 {
-                        let color = DeviceColor(r: Int(values[0]), g: Int(values[1]), b: Int(values[2]))
-                        let isOn = values[0] > 0 || values[1] > 0 || values[2] > 0 || values[3] > 0
-                        try? await controller.setDevicePower(device: device, on: isOn)
-                        if isOn {
-                            try? await controller.setDeviceColor(device: device, color: color)
-                            // White channel could affect brightness
-                            let brightness = Int(Double(values[3]) / 255.0 * 100.0)
-                            if brightness > 0 {
-                                try? await controller.setDeviceBrightness(device: device, value: brightness)
-                            }
-                        }
-                    }
-                    
-                case .rgba:
-                    // RGBA channels (amber as brightness modifier)
-                    if values.count >= 4 {
-                        let color = DeviceColor(r: Int(values[0]), g: Int(values[1]), b: Int(values[2]))
-                        let isOn = values[0] > 0 || values[1] > 0 || values[2] > 0
-                        try? await controller.setDevicePower(device: device, on: isOn)
-                        if isOn {
-                            try? await controller.setDeviceColor(device: device, color: color)
-                        }
-                    }
-                    
-                case .rgbDimmer:
-                    // Dimmer + RGB channels
-                    if values.count >= 4 {
-                        let brightness = Int(Double(values[0]) / 255.0 * 100.0)
-                        let color = DeviceColor(r: Int(values[1]), g: Int(values[2]), b: Int(values[3]))
-                        let isOn = values[0] > 0
-                        try? await controller.setDevicePower(device: device, on: isOn)
-                        if isOn {
-                            try? await controller.setDeviceBrightness(device: device, value: brightness)
-                            try? await controller.setDeviceColor(device: device, color: color)
-                        }
-                    }
-                    
-                case .extended:
-                    // Dimmer + RGB + White + Amber
-                    if values.count >= 6 {
-                        let brightness = Int(Double(values[0]) / 255.0 * 100.0)
-                        let color = DeviceColor(r: Int(values[1]), g: Int(values[2]), b: Int(values[3]))
-                        let isOn = values[0] > 0
-                        try? await controller.setDevicePower(device: device, on: isOn)
-                        if isOn {
-                            try? await controller.setDeviceBrightness(device: device, value: brightness)
-                            try? await controller.setDeviceColor(device: device, color: color)
-                        }
+                    // Set color if RGB channels are present
+                    if hasColor {
+                        let color = DeviceColor(r: Int(redValue), g: Int(greenValue), b: Int(blueValue))
+                        try? await controller.setDeviceColor(device: device, color: color)
                     }
                 }
             }
@@ -1029,7 +1189,8 @@ struct DMXControl: DeviceControlProtocol {
 
 @MainActor
 class GoveeController: ObservableObject {
-    private let deviceStore: DeviceStore
+    let deviceStore: DeviceStore
+    let profileStore: DMXProfileStore
     private let settings: SettingsStore
     private var pollingTask: Task<Void, Never>?
     private var dmxReceiver: DMXReceiver?
@@ -1039,9 +1200,10 @@ class GoveeController: ObservableObject {
     private var homeKitManager: HomeKitManager?
     #endif
     
-    init(deviceStore: DeviceStore, settings: SettingsStore) {
+    init(deviceStore: DeviceStore, settings: SettingsStore, profileStore: DMXProfileStore) {
         self.deviceStore = deviceStore
         self.settings = settings
+        self.profileStore = profileStore
         
         #if canImport(HomeKit)
         if #available(macOS 10.15, *), settings.homeKitEnabled {

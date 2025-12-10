@@ -4,6 +4,7 @@ import SwiftUI
 struct Govee_MacApp: App {
     @StateObject private var settings: SettingsStore
     @StateObject private var deviceStore: DeviceStore
+    @StateObject private var profileStore: DMXProfileStore
     @StateObject private var controller: GoveeController
     @StateObject private var menuBarController: MenuBarController
 
@@ -12,11 +13,13 @@ struct Govee_MacApp: App {
     init() {
         let settingsStore = SettingsStore()
         let store = DeviceStore()
-        let ctrl = GoveeController(deviceStore: store, settings: settingsStore)
+        let profiles = DMXProfileStore()
+        let ctrl = GoveeController(deviceStore: store, settings: settingsStore, profileStore: profiles)
         let menuBar = MenuBarController(deviceStore: store, controller: ctrl)
         
         _settings = StateObject(wrappedValue: settingsStore)
         _deviceStore = StateObject(wrappedValue: store)
+        _profileStore = StateObject(wrappedValue: profiles)
         _controller = StateObject(wrappedValue: ctrl)
         _menuBarController = StateObject(wrappedValue: menuBar)
         _showWelcome = State(initialValue: !UserDefaults.standard.bool(forKey: "hasCompletedWelcome"))
@@ -27,6 +30,7 @@ struct Govee_MacApp: App {
             ContentView()
                 .environmentObject(settings)
                 .environmentObject(deviceStore)
+                .environmentObject(profileStore)
                 .environmentObject(controller)
                 .sheet(isPresented: $showWelcome) {
                     WelcomeView()
