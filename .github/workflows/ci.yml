@@ -23,7 +23,7 @@ jobs:
       
     - name: Build (without code signing)
       run: |
-        xcodebuild -project "Govee Mac.xcodeproj" \
+        timeout 600 xcodebuild -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
           -configuration Debug \
           CODE_SIGN_IDENTITY="" \
@@ -33,7 +33,7 @@ jobs:
       
     - name: Run tests (if any)
       run: |
-        xcodebuild test \
+        timeout 600 xcodebuild test \
           -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
           CODE_SIGN_IDENTITY="" \
@@ -44,7 +44,7 @@ jobs:
       
     - name: Check for compiler warnings
       run: |
-        xcodebuild -project "Govee Mac.xcodeproj" \
+        timeout 600 xcodebuild -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
           -configuration Debug \
           CODE_SIGN_IDENTITY="" \
