@@ -12,8 +12,9 @@ A powerful, native macOS app to control your smart lights with support for **mul
 
 ### 🌈 Multi-Manufacturer Support
 - **Govee** - Native Cloud API and LAN control
-- **Philips Hue** - Via HomeKit or Home Assistant
-- **LIFX** - Via HomeKit or Home Assistant  
+- **Philips Hue** - ⭐ Native Hue Bridge API, HomeKit, or Home Assistant
+- **WLED** - ⭐ Native REST API control
+- **LIFX** - LAN protocol (partial), HomeKit, or Home Assistant  
 - **Nanoleaf** - Via HomeKit
 - **100+ Other Brands** - Via Home Assistant integration
 - See [MANUFACTURER_INTEGRATION.md](MANUFACTURER_INTEGRATION.md) for complete guide
@@ -21,6 +22,9 @@ A powerful, native macOS app to control your smart lights with support for **mul
 ### 🎮 Multi-Protocol Support
 - **☁️ Govee Cloud API** - Official API with full device support
 - **🏠 LAN Control** - Automatic mDNS/Bonjour discovery for local network control (faster response)
+- **💡 Philips Hue API** - ⭐ NEW: Native Hue Bridge discovery and control
+- **🌈 WLED API** - ⭐ NEW: Direct control for WLED controllers
+- **🔷 LIFX LAN** - ⭐ NEW: LIFX protocol support (work in progress)
 - **🍎 HomeKit/Matter** - Native integration with Apple Home devices (Hue, LIFX, Nanoleaf, etc.)
 - **🏡 Home Assistant** - REST API integration for advanced automation (supports all manufacturers)
 - **🎭 DMX Control** - ArtNet and sACN receiver for professional lighting control

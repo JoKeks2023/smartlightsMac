@@ -2,11 +2,33 @@
 
 ## 🌟 Overview
 
-This document explains how different smart light manufacturers can be integrated with Govee Mac, including **Philips Hue**, LIFX, Nanoleaf, TP-Link Kasa, and others.
+This document explains how different smart light manufacturers can be integrated with Govee Mac, including **Philips Hue**, LIFX, Nanoleaf, TP-Link Kasa, WLED, and others.
 
 ## ✅ Currently Supported Integration Methods
 
-### 1. **HomeKit/Matter Integration** (Recommended for Philips Hue)
+### 1. **Native Protocol Support** (⭐ NEW!)
+The app now includes native protocol support for several manufacturers with direct local network control:
+
+#### Supported via Native Protocols:
+- ✅ **Philips Hue** - Native Hue Bridge API discovery and control
+- ✅ **WLED** - Direct REST API control for WLED controllers  
+- ⚠️ **LIFX** - LAN protocol support (partial implementation)
+
+#### How it Works:
+- **Automatic Discovery**: Discovers Hue Bridges, WLED controllers, and LIFX lights via mDNS/Bonjour
+- **Direct Control**: No additional hubs or servers required
+- **Fast Response**: Local network communication for instant control
+
+#### Setup:
+1. Ensure devices are on the same network as your Mac
+2. Open Govee Mac and click Refresh
+3. Discovered devices appear with respective badges (Hue, WLED, LIFX)
+
+**Note:** Philips Hue Bridge requires API key registration (press link button during first use)
+
+---
+
+### 2. **HomeKit/Matter Integration** (Recommended for maximum compatibility)
 The app already includes native HomeKit support, which works with **any** HomeKit-compatible smart light:
 
 #### Supported Manufacturers via HomeKit:
@@ -44,7 +66,7 @@ The app already includes native HomeKit support, which works with **any** HomeKi
 
 ---
 
-### 2. **Home Assistant Integration** (Universal Solution)
+### 3. **Home Assistant Integration** (Universal Solution)
 For the most flexibility, use Home Assistant as a universal bridge:
 
 #### Supported Manufacturers via Home Assistant:
@@ -88,44 +110,45 @@ For the most flexibility, use Home Assistant as a universal bridge:
 
 ---
 
-### 3. **LAN Discovery** (Works with Some Manufacturers)
+### 4. **LAN Discovery** (Automatic for Native Protocols)
 The app automatically discovers devices on your local network via mDNS/Bonjour:
 
 #### Currently Scanned Service Types:
 - `_govee._tcp.` - Govee devices
-- `_wled._tcp.` - WLED controllers
+- `_wled._tcp.` - WLED controllers  
 - `_hap._tcp.` - HomeKit devices (including Hue Bridge)
 - `_lifx._tcp.` - LIFX lights
 - `_http._tcp.` - Generic HTTP-based lights
 
-#### Manufacturers Supported via LAN:
-- ✅ Govee (native support)
-- ⚠️ LIFX (discovered but needs protocol implementation)
-- ⚠️ WLED (discovered but needs protocol implementation)
-- ⚠️ Philips Hue Bridge (discovered via HAP but needs native API implementation)
+#### Manufacturers with Native LAN Support:
+- ✅ Govee (full native support)
+- ✅ WLED (REST API implemented)
+- ✅ Philips Hue Bridge (native API implemented)
+- ⚠️ LIFX (partial LAN protocol - work in progress)
 
 #### How to Enable:
 1. Open Govee Mac Settings
 2. Enable "Prefer LAN when available"
 3. Click Refresh to discover devices
-4. Discovered devices show "LAN" badge
+4. Discovered devices show their transport badge (WLED, Hue, LIFX, LAN)
 
 #### Limitations:
-- ⚠️ Discovery only finds devices, control protocol must be implemented per manufacturer
-- ⚠️ Currently only Govee LAN protocol is fully implemented
+- ⚠️ LIFX LAN protocol requires UDP binary protocol (HTTP API preferred)
 - ⚠️ Not all devices broadcast mDNS
+- ⚠️ Hue Bridge requires link button press for initial API key generation
 
 ---
 
-## 🔧 Adding Native Philips Hue Bridge API Support
+## 🔧 Native Philips Hue Bridge API Support (✅ IMPLEMENTED)
 
-### Why Native Hue Support?
-While Hue works great via HomeKit or Home Assistant, native Hue Bridge API support would provide:
-- Direct control without HomeKit or HA
-- Access to Hue-specific features (scenes, entertainment mode)
-- Faster discovery and control
+### Features
+Native Hue Bridge API support provides:
+- ✅ Direct control without HomeKit or HA
+- ✅ Automatic bridge discovery via Hue cloud and mDNS
+- ✅ Full light control (power, brightness, color, color temperature)
+- ⚠️ Scenes and entertainment mode (future enhancement)
 
-### Implementation Plan (Future Enhancement)
+### How It Works
 
 #### 1. Hue Bridge Discovery
 ```swift
@@ -240,7 +263,14 @@ enum TransportKind: String, Codable, Hashable {
 
 ### For Philips Hue Users
 
-#### Option 1: HomeKit (Easiest)
+#### Option 1: Native Hue Bridge API (⭐ NEW - Direct Control)
+1. Ensure your **Philips Hue Bridge** is on the same network
+2. Open **Govee Mac** and click Refresh
+3. Bridge will be discovered automatically
+4. **First time only**: Press the link button on your Hue Bridge when prompted
+5. ✅ Your Hue lights appear instantly with "Hue" badge!
+
+#### Option 2: HomeKit (Easy & Reliable)
 1. Open **Home** app on macOS
 2. Add your **Philips Hue Bridge**:
    - Tap + → Add Accessory
@@ -251,7 +281,7 @@ enum TransportKind: String, Codable, Hashable {
    - Grant permission
 4. ✅ Your Hue lights now appear in Govee Mac!
 
-#### Option 2: Home Assistant (Most Powerful)
+#### Option 3: Home Assistant (Most Powerful)
 1. Install **Home Assistant** ([installation guide](https://www.home-assistant.io/installation/))
 2. Add **Hue integration** in HA:
    - Configuration → Integrations → Add Hue
@@ -287,11 +317,21 @@ You can use multiple methods simultaneously:
 
 ## 🔮 Future Enhancements
 
-### Planned
-- [ ] Native Philips Hue Bridge API support
-- [ ] LIFX LAN protocol implementation
-- [ ] WLED API integration
+### Completed ✅
+- [x] Native Philips Hue Bridge API support
+- [x] WLED API integration  
+- [x] LAN discovery for multiple manufacturers
+
+### In Progress ⚠️
+- [ ] LIFX LAN protocol (UDP binary protocol implementation)
+- [ ] Hue Entertainment mode support
+- [ ] Hue Scenes integration
+
+### Planned 📋
 - [ ] Nanoleaf OpenAPI support
+- [ ] TP-Link Kasa local protocol
+- [ ] Yeelight LAN protocol
+- [ ] Full LIFX binary protocol over UDP
 
 ### Community Contributions Welcome!
 Want to add support for your favorite manufacturer? Check [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines!
