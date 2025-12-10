@@ -272,6 +272,14 @@ final class SettingsStore: ObservableObject {
     @Published var dmxProtocol: DMXProtocolType {
         didSet { UserDefaults.standard.set(dmxProtocol.rawValue, forKey: "dmxProtocol") }
     }
+    // Dictionary to store Hue username (API key) per bridge IP
+    @Published var hueBridgeCredentials: [String: String] = [:] {
+        didSet {
+            if let encoded = try? JSONEncoder().encode(hueBridgeCredentials) {
+                UserDefaults.standard.set(encoded, forKey: "hueBridgeCredentials")
+            }
+        }
+    }
     
     init() {
         // Migrate from UserDefaults to Keychain
@@ -288,6 +296,12 @@ final class SettingsStore: ObservableObject {
         self.dmxEnabled = UserDefaults.standard.object(forKey: "dmxEnabled") as? Bool ?? false
         let protocolString = UserDefaults.standard.string(forKey: "dmxProtocol") ?? DMXProtocolType.artnet.rawValue
         self.dmxProtocol = DMXProtocolType(rawValue: protocolString) ?? .artnet
+        
+        // Load Hue bridge credentials
+        if let data = UserDefaults.standard.data(forKey: "hueBridgeCredentials"),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+            self.hueBridgeCredentials = decoded
+        }
     }
 }
 
@@ -599,11 +613,11 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
             transport = .wled
         } else if serviceType.contains("_lifx") {
             transport = .lifx
-        } else if serviceType.contains("_hue") {
-            transport = .hue
         } else if serviceType.contains("_govee") {
             transport = .lan
         }
+        // Note: Hue devices broadcast as _hap._tcp. (HomeKit) but we discover them
+        // separately via HueBridgeDiscovery using the Hue cloud discovery service
         
         let device = GoveeDevice(
             id: "\(transport.rawValue)-\(sender.name)-\(ipAddress)",
@@ -613,7 +627,7 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
             online: true,
             supportsBrightness: true,
             supportsColor: true,
-            supportsColorTemperature: transport == .hue,
+            supportsColorTemperature: transport == .hue || transport == .wled,
             transports: [transport],
             isOn: nil,
             brightness: nil,
@@ -1309,14 +1323,17 @@ struct HueBridgeControl: DeviceControlProtocol {
         var hue: Double = 0
         if delta != 0 {
             if maxC == r {
-                hue = 60 * (((g - b) / delta).truncatingRemainder(dividingBy: 6))
+                let h = (g - b) / delta
+                hue = 60 * (h < 0 ? h + 6 : h)  // Ensure positive result
             } else if maxC == g {
                 hue = 60 * (((b - r) / delta) + 2)
             } else {
                 hue = 60 * (((r - g) / delta) + 4)
             }
         }
-        if hue < 0 { hue += 360 }
+        // Normalize hue to 0-360 range
+        while hue < 0 { hue += 360 }
+        while hue >= 360 { hue -= 360 }
         
         let saturation = maxC == 0 ? 0 : (delta / maxC)
         
@@ -1381,9 +1398,28 @@ struct WLEDControl: DeviceControlProtocol {
     }
     
     func setColorTemperature(device: GoveeDevice, value: Int) async throws {
-        // WLED doesn't directly support color temperature in the same way
-        // We could approximate it by setting RGB values, but skip for now
-        throw URLError(.unsupportedURL)
+        // WLED doesn't directly support color temperature control
+        // Could be approximated with RGB conversion, but not implemented
+        throw SmartLightError.featureNotSupported("WLED color temperature control")
+    }
+}
+
+// MARK: - Protocol Errors
+
+enum SmartLightError: LocalizedError {
+    case featureNotSupported(String)
+    case notImplemented(String)
+    case authenticationRequired
+    
+    var errorDescription: String? {
+        switch self {
+        case .featureNotSupported(let detail):
+            return "Feature not supported: \(detail)"
+        case .notImplemented(let detail):
+            return "Not yet implemented: \(detail)"
+        case .authenticationRequired:
+            return "Authentication required. Please configure device credentials."
+        }
     }
 }
 
@@ -1401,32 +1437,24 @@ struct LIFXControl: DeviceControlProtocol {
     let deviceIP: String
     
     // LIFX LAN Protocol uses UDP packets on port 56700
-    // For simplicity, we'll use LIFX HTTP API if the device supports it
-    // Full implementation would use binary protocol over UDP
-    
-    private func sendHTTPCommand(_ endpoint: String, body: [String: Any]) async throws {
-        // LIFX Cloud API would be used here if we had a token
-        // For LAN control, we'd need to implement the binary protocol
-        // This is a placeholder that would need proper implementation
-        throw URLError(.unsupportedURL)
-    }
+    // Full implementation requires binary protocol over UDP
     
     func setPower(device: GoveeDevice, on: Bool) async throws {
-        // Would need to implement LIFX binary protocol
-        // Packet structure: Header + Payload
-        throw URLError(.unsupportedURL)
+        // Requires LIFX binary protocol implementation
+        // Packet structure: Header (36 bytes) + Payload (varies by message type)
+        throw SmartLightError.notImplemented("LIFX UDP binary protocol")
     }
     
     func setBrightness(device: GoveeDevice, value: Int) async throws {
-        throw URLError(.unsupportedURL)
+        throw SmartLightError.notImplemented("LIFX UDP binary protocol")
     }
     
     func setColor(device: GoveeDevice, color: DeviceColor) async throws {
-        throw URLError(.unsupportedURL)
+        throw SmartLightError.notImplemented("LIFX UDP binary protocol")
     }
     
     func setColorTemperature(device: GoveeDevice, value: Int) async throws {
-        throw URLError(.unsupportedURL)
+        throw SmartLightError.notImplemented("LIFX UDP binary protocol")
     }
 }
 
@@ -1576,15 +1604,15 @@ class GoveeController: ObservableObject {
         }
         
         // LIFX devices (LAN protocol)
+        // Note: LIFX requires UDP binary protocol - not yet fully implemented
         if device.transports.contains(.lifx), let ip = device.ipAddress {
-            return LIFXControl(deviceIP: ip)
+            // return LIFXControl(deviceIP: ip)  // Uncomment when UDP protocol is implemented
         }
         
         // Philips Hue Bridge devices
-        if device.transports.contains(.hue), let ip = device.ipAddress {
-            // TODO: Need to store and retrieve Hue username per bridge
-            // For now, skip Hue control until username is configured
-            // return HueBridgeControl(bridgeIP: ip, username: "stored-username")
+        if device.transports.contains(.hue), let ip = device.ipAddress,
+           let username = settings.hueBridgeCredentials[ip] {
+            return HueBridgeControl(bridgeIP: ip, username: username)
         }
         
         if settings.prefersLan, device.transports.contains(.lan), let ip = device.ipAddress {
