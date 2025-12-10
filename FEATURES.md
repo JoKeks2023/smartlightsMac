@@ -2,10 +2,26 @@
 
 ## 🎉 All Requested Features Implemented!
 
+## 🌟 Multi-Manufacturer Support
+
+The app supports controlling smart lights from **multiple manufacturers**:
+
+### ✅ Directly Supported
+- **Govee** - Native Cloud API and LAN protocol
+- **Philips Hue** - Via HomeKit or Home Assistant
+- **LIFX** - Via HomeKit or Home Assistant
+- **Nanoleaf** - Via HomeKit
+- **TP-Link Kasa/Tapo** - Via Home Assistant
+- **Yeelight** - Via Home Assistant
+- **WLED** - Via Home Assistant
+- **100+ Other Brands** - Via Home Assistant
+
+See [MANUFACTURER_INTEGRATION.md](MANUFACTURER_INTEGRATION.md) for complete integration guide.
+
 ### ✅ 1. LAN Auto-Discovery
 **Implementation:** `GoveeModels.swift` - `LANDiscovery` class
-- Uses NetService (Bonjour/mDNS) to automatically discover Govee devices on local network
-- Scans for HTTP services with "Govee" or "ihoment" in the name
+- Uses NetService (Bonjour/mDNS) to automatically discover devices on local network
+- Scans for multiple service types: Govee, WLED, HAP (HomeKit), LIFX, generic HTTP
 - Automatically resolves IP addresses and adds devices to the list
 - 5-second timeout for discovery
 - Devices are tagged with `.lan` transport
@@ -16,28 +32,30 @@
 - Discovered devices will show "LAN" badge in the UI
 - LAN control is preferred when available (faster than Cloud)
 
-### ✅ 2. HomeKit Integration
+### ✅ 2. HomeKit Integration (Supports Multiple Manufacturers)
 **Implementation:** `GoveeModels.swift` - `HomeKitManager` and `HomeKitControl`
 - Full HomeKit/Matter device support
-- Discovers Govee devices added to HomeKit
+- Discovers **any** HomeKit-compatible smart light (not just Govee)
+- Works with Philips Hue, LIFX, Nanoleaf, Eve, Meross, and more
 - Reads characteristics: power, brightness, hue/saturation, color temperature
 - Writes values back to HomeKit accessories
 - RGB to HSV conversion for color control
 
 **How to enable:**
-1. Go to Settings
-2. Toggle "Enable HomeKit (Matter)"
+1. First add your lights to the **Home** app (any HomeKit-compatible brand)
+2. In Govee Mac: Settings → Toggle "Enable HomeKit (Matter)"
 3. Grant HomeKit permission when prompted
-4. Your HomeKit Govee devices will appear with "HomeKit" badge
+4. **All** your HomeKit lights will appear with "HomeKit" badge
 
 **Entitlements added:**
 - `com.apple.developer.homekit` - Required for HomeKit access
 - Usage description added to Info.plist
 
-### ✅ 3. Home Assistant Integration
+### ✅ 3. Home Assistant Integration (Universal Manufacturer Support)
 **Implementation:** `GoveeModels.swift` - `HomeAssistantDiscovery` and `HomeAssistantControl`
 - Connects to your Home Assistant instance via REST API
-- Discovers light entities containing "govee" in friendly name
+- Discovers light entities containing common manufacturer names
+- Works with **100+ integrations**: Hue, LIFX, Govee, TP-Link, Yeelight, Tuya, etc.
 - Reads device state (on/off, brightness) from HA
 - Calls light.turn_on/turn_off services
 - Supports brightness_pct, rgb_color, color_temp (mireds conversion)

@@ -677,13 +677,13 @@ class HomeKitManager: NSObject, ObservableObject, HMHomeManagerDelegate {
         try? await Task.sleep(nanoseconds: 500_000_000)
         
         guard let home = homeManager.primaryHome else { return [] }
-        let goveeAccessories = home.accessories.filter { acc in
-            acc.name.lowercased().contains("govee") ||
-            acc.manufacturer?.lowercased().contains("govee") == true ||
-            acc.manufacturer?.lowercased().contains("ihoment") == true
+        // Discover ALL HomeKit accessories with light services, not just Govee
+        // This enables support for Philips Hue, LIFX, Nanoleaf, and other HomeKit lights
+        let lightAccessories = home.accessories.filter { acc in
+            acc.services.contains { $0.serviceType == HMServiceTypeLightbulb }
         }
         
-        return goveeAccessories.compactMap { accessory in
+        return lightAccessories.compactMap { accessory in
             guard let lightService = accessory.services.first(where: { $0.serviceType == HMServiceTypeLightbulb }) else { return nil }
             
             let supportsBrightness = lightService.characteristics.contains { $0.characteristicType == HMCharacteristicTypeBrightness }
@@ -808,33 +808,33 @@ struct HomeAssistantDiscovery: DeviceDiscoveryProtocol {
             guard let entityId = obj["entity_id"] as? String, entityId.hasPrefix("light.") else { continue }
             if let attr = obj["attributes"] as? [String: Any] {
                 let friendly = (attr["friendly_name"] as? String) ?? entityId
-                if friendly.lowercased().contains("govee") {
-                    let supportsBrightness = (attr["supported_features"] as? Int ?? 0) & 1 == 1
-                    let modes = (attr["supported_color_modes"] as? [String])?.map { $0.lowercased() } ?? []
-                    let supportsColor = modes.contains { ["rgb","hs","xy"].contains($0) }
-                    let supportsCT = modes.contains("color_temp")
-                    
-                    let state = obj["state"] as? String
-                    let isOn = state == "on"
-                    let brightness = attr["brightness"] as? Int
-                    let brightnessPercent = brightness.map { Int(Double($0) / 255.0 * 100.0) }
-                    
-                    devices.append(GoveeDevice(
-                        id: entityId,
-                        name: friendly,
-                        model: nil,
-                        ipAddress: nil,
-                        online: true,
-                        supportsBrightness: supportsBrightness,
-                        supportsColor: supportsColor,
-                        supportsColorTemperature: supportsCT,
-                        transports: [.homeAssistant],
-                        isOn: isOn,
-                        brightness: brightnessPercent,
-                        color: nil,
-                        colorTemperature: nil
-                    ))
-                }
+                // Accept all light entities from Home Assistant (not just Govee)
+                // This allows control of Hue, LIFX, and other brands via HA
+                let supportsBrightness = (attr["supported_features"] as? Int ?? 0) & 1 == 1
+                let modes = (attr["supported_color_modes"] as? [String])?.map { $0.lowercased() } ?? []
+                let supportsColor = modes.contains { ["rgb","hs","xy"].contains($0) }
+                let supportsCT = modes.contains("color_temp")
+                
+                let state = obj["state"] as? String
+                let isOn = state == "on"
+                let brightness = attr["brightness"] as? Int
+                let brightnessPercent = brightness.map { Int(Double($0) / 255.0 * 100.0) }
+                
+                devices.append(GoveeDevice(
+                    id: entityId,
+                    name: friendly,
+                    model: nil,
+                    ipAddress: nil,
+                    online: true,
+                    supportsBrightness: supportsBrightness,
+                    supportsColor: supportsColor,
+                    supportsColorTemperature: supportsCT,
+                    transports: [.homeAssistant],
+                    isOn: isOn,
+                    brightness: brightnessPercent,
+                    color: nil,
+                    colorTemperature: nil
+                ))
             }
         }
         return devices
