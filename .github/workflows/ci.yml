@@ -23,11 +23,9 @@ jobs:
       
     - name: Build (without code signing)
       run: |
-        cd "Govee Mac"
-        xcodebuild -project "Govee Mac.xcodeproj" \
+        timeout 600 xcodebuild -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
           -configuration Debug \
-          -destination 'platform=macOS' \
           CODE_SIGN_IDENTITY="" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
@@ -35,11 +33,9 @@ jobs:
       
     - name: Run tests (if any)
       run: |
-        cd "Govee Mac"
-        xcodebuild test \
+        timeout 600 xcodebuild test \
           -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
-          -destination 'platform=macOS' \
           CODE_SIGN_IDENTITY="" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
@@ -48,8 +44,7 @@ jobs:
       
     - name: Check for compiler warnings
       run: |
-        cd "Govee Mac"
-        xcodebuild -project "Govee Mac.xcodeproj" \
+        timeout 600 xcodebuild -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
           -configuration Debug \
           CODE_SIGN_IDENTITY="" \
@@ -61,7 +56,7 @@ jobs:
     - name: Swift lint (optional)
       run: |
         if command -v swiftlint &> /dev/null; then
-          cd "Govee Mac/Govee Mac"
+          cd "Govee Mac"
           swiftlint lint --reporter github-actions-logging
         else
           echo "SwiftLint not installed, skipping"
@@ -78,7 +73,7 @@ jobs:
       
     - name: Check Swift files
       run: |
-        cd "Govee Mac/Govee Mac"
+        cd "Govee Mac"
         for file in $(find . -name "*.swift" -not -path "*/.*"); do
           echo "Checking $file"
           xcrun swiftc -parse "$file" \
