@@ -587,7 +587,7 @@ struct SettingsView: View {
                 SecureField("Long-Lived Token", text: $settings.haToken)
             }
             Section(header: Text("DMX Control (ArtNet/sACN)")) {
-                Toggle("Enable DMX Control", isOn: $settings.dmxEnabled)
+                Toggle("Enable DMX Receiver", isOn: $settings.dmxEnabled)
                 if settings.dmxEnabled {
                     Picker("Protocol", selection: $settings.dmxProtocol) {
                         Text("ArtNet").tag(DMXProtocolType.artnet)
@@ -595,19 +595,27 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     
-                    TextField("Broadcast Address", text: $settings.dmxBroadcastAddress)
-                        .textFieldStyle(.roundedBorder)
-                    
-                    Stepper("Output Rate: \(settings.dmxOutputRate) Hz", value: $settings.dmxOutputRate, in: 1...44)
-                    
-                    Text("Configure DMX channel mappings for each device in the device context menu.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("The app will listen for incoming DMX packets and control mapped Govee devices.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.blue)
+                            Text("Port: \(settings.dmxProtocol == .artnet ? "6454" : "5568")")
+                                .font(.caption)
+                        }
+                        
+                        Text("Configure DMX channel mappings for each device via right-click menu.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
         .padding(20)
-        .frame(minWidth: 500, minHeight: settings.dmxEnabled ? 500 : 340)
+        .frame(minWidth: 500, minHeight: settings.dmxEnabled ? 520 : 340)
     }
 }
 

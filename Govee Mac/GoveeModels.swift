@@ -135,12 +135,6 @@ final class SettingsStore: ObservableObject {
     @Published var dmxProtocol: DMXProtocolType {
         didSet { UserDefaults.standard.set(dmxProtocol.rawValue, forKey: "dmxProtocol") }
     }
-    @Published var dmxBroadcastAddress: String {
-        didSet { UserDefaults.standard.set(dmxBroadcastAddress, forKey: "dmxBroadcastAddress") }
-    }
-    @Published var dmxOutputRate: Int {
-        didSet { UserDefaults.standard.set(dmxOutputRate, forKey: "dmxOutputRate") }
-    }
     
     init() {
         // Migrate from UserDefaults to Keychain
@@ -157,8 +151,6 @@ final class SettingsStore: ObservableObject {
         self.dmxEnabled = UserDefaults.standard.object(forKey: "dmxEnabled") as? Bool ?? false
         let protocolString = UserDefaults.standard.string(forKey: "dmxProtocol") ?? DMXProtocolType.artnet.rawValue
         self.dmxProtocol = DMXProtocolType(rawValue: protocolString) ?? .artnet
-        self.dmxBroadcastAddress = UserDefaults.standard.string(forKey: "dmxBroadcastAddress") ?? "255.255.255.255"
-        self.dmxOutputRate = UserDefaults.standard.object(forKey: "dmxOutputRate") as? Int ?? 40
     }
 }
 
@@ -706,87 +698,36 @@ struct HomeAssistantControl: DeviceControlProtocol {
 actor DMXUniverseManager {
     private var universes: [Int: [UInt8]] = [:]
     
-    func getUniverse(_ universeID: Int) -> [UInt8] {
-        if universes[universeID] == nil {
-            universes[universeID] = Array(repeating: 0, count: 512)
-        }
-        return universes[universeID]!
+    func updateUniverse(_ universeID: Int, channels: [UInt8]) {
+        universes[universeID] = channels
     }
     
-    func setChannel(_ universeID: Int, channel: Int, value: UInt8) {
-        if universes[universeID] == nil {
-            universes[universeID] = Array(repeating: 0, count: 512)
-        }
-        if channel >= 1 && channel <= 512 {
-            universes[universeID]![channel - 1] = value
-        }
+    func getChannelValue(_ universeID: Int, channel: Int) -> UInt8? {
+        guard let universe = universes[universeID], channel >= 1, channel <= 512 else { return nil }
+        return universe[channel - 1]
     }
     
-    func setChannels(_ universeID: Int, startChannel: Int, values: [UInt8]) {
-        if universes[universeID] == nil {
-            universes[universeID] = Array(repeating: 0, count: 512)
-        }
-        for (offset, value) in values.enumerated() {
-            let channel = startChannel + offset
-            if channel >= 1 && channel <= 512 {
-                universes[universeID]![channel - 1] = value
-            }
-        }
+    func getChannelValues(_ universeID: Int, startChannel: Int, count: Int) -> [UInt8] {
+        guard let universe = universes[universeID] else { return [] }
+        let start = max(0, startChannel - 1)
+        let end = min(512, start + count)
+        return Array(universe[start..<end])
     }
 }
 
-class DMXController {
-    private let socket: CFSocket?
-    private let protocol: DMXProtocolType
-    private let broadcastAddress: String
+@MainActor
+class DMXReceiver: ObservableObject {
+    private var socket: Int32 = -1
     private let universeManager = DMXUniverseManager()
-    private var sequenceNumber: UInt8 = 0
+    private var receiveTask: Task<Void, Never>?
+    private let `protocol`: DMXProtocolType
+    weak var controller: GoveeController?
     
-    init(protocol: DMXProtocolType, broadcastAddress: String = "255.255.255.255") {
+    init(protocol: DMXProtocolType) {
         self.protocol = `protocol`
-        self.broadcastAddress = broadcastAddress
-        
-        // Create UDP socket
-        var context = CFSocketContext()
-        self.socket = CFSocketCreate(
-            kCFAllocatorDefault,
-            PF_INET,
-            SOCK_DGRAM,
-            IPPROTO_UDP,
-            0,
-            nil,
-            &context
-        )
-        
-        // Enable broadcast
-        if let socket = self.socket {
-            let fd = CFSocketGetNative(socket)
-            var broadcast: Int32 = 1
-            setsockopt(fd, SOL_SOCKET, SO_BROADCAST, &broadcast, socklen_t(MemoryLayout<Int32>.size))
-        }
     }
     
-    deinit {
-        if let socket = socket {
-            CFSocketInvalidate(socket)
-        }
-    }
-    
-    func sendDMXData(universe: Int, channels: [UInt8]) async throws {
-        guard let socket = socket else { return }
-        
-        let packet: Data
-        switch `protocol` {
-        case .artnet:
-            packet = createArtNetPacket(universe: universe, data: channels)
-        case .sacn:
-            packet = createSACNPacket(universe: universe, data: channels)
-        }
-        
-        // Setup address
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        
+    func start() throws {
         let port: UInt16
         switch `protocol` {
         case .artnet:
@@ -794,121 +735,260 @@ class DMXController {
         case .sacn:
             port = 5568
         }
+        
+        // Create UDP socket
+        socket = Darwin.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
+        guard socket >= 0 else {
+            throw NSError(domain: "DMXReceiver", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create socket"])
+        }
+        
+        // Set socket options
+        var reuseAddr: Int32 = 1
+        setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &reuseAddr, socklen_t(MemoryLayout<Int32>.size))
+        
+        // Bind to port
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = port.bigEndian
+        addr.sin_addr.s_addr = INADDR_ANY
         
-        if broadcastAddress == "255.255.255.255" {
-            addr.sin_addr.s_addr = INADDR_BROADCAST
-        } else {
-            broadcastAddress.withCString { cString in
-                inet_pton(AF_INET, cString, &addr.sin_addr)
+        let bindResult = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockaddrPtr in
+                Darwin.bind(socket, sockaddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
         
-        // Send packet
-        let addressData = Data(bytes: &addr, count: MemoryLayout<sockaddr_in>.size)
-        packet.withUnsafeBytes { bufferPtr in
-            if let baseAddress = bufferPtr.baseAddress {
-                let data = CFDataCreate(kCFAllocatorDefault, baseAddress.assumingMemoryBound(to: UInt8.self), packet.count)
-                let address = CFDataCreate(kCFAllocatorDefault, addressData.withUnsafeBytes { $0.baseAddress!.assumingMemoryBound(to: UInt8.self) }, addressData.count)
-                CFSocketSendData(socket, address, data, 0)
-            }
+        guard bindResult == 0 else {
+            Darwin.close(socket)
+            throw NSError(domain: "DMXReceiver", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to bind socket to port \(port)"])
+        }
+        
+        // For sACN, join multicast group
+        if `protocol` == .sacn {
+            // sACN uses multicast addresses 239.255.0.0 - 239.255.63.255
+            // Universe 1 = 239.255.0.1, etc.
+            // For now, join the base multicast group
+            var mreq = ip_mreq()
+            inet_pton(AF_INET, "239.255.0.1", &mreq.imr_multiaddr)
+            mreq.imr_interface.s_addr = INADDR_ANY
+            setsockopt(socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, socklen_t(MemoryLayout<ip_mreq>.size))
+        }
+        
+        // Start receiving
+        receiveTask = Task { [weak self] in
+            await self?.receiveLoop()
         }
     }
     
-    private func createArtNetPacket(universe: Int, data: [UInt8]) -> Data {
-        var packet = Data()
-        
-        // Art-Net header
-        packet.append(contentsOf: "Art-Net\0".utf8) // ID (8 bytes)
-        packet.append(contentsOf: [0x00, 0x50]) // OpCode ArtDMX (0x5000 little-endian)
-        packet.append(contentsOf: [0x00, 0x0e]) // Protocol version 14
-        packet.append(0) // Sequence (0 = no sequence)
-        packet.append(0) // Physical port
-        packet.append(UInt8(universe & 0xFF)) // Universe low byte
-        packet.append(UInt8((universe >> 8) & 0xFF)) // Universe high byte
-        
-        // Length (high byte first)
-        let length = UInt16(min(data.count, 512))
-        packet.append(UInt8((length >> 8) & 0xFF))
-        packet.append(UInt8(length & 0xFF))
-        
-        // DMX data
-        packet.append(contentsOf: data.prefix(512))
-        
-        return packet
+    func stop() {
+        receiveTask?.cancel()
+        if socket >= 0 {
+            Darwin.close(socket)
+            socket = -1
+        }
     }
     
-    private func createSACNPacket(universe: Int, data: [UInt8]) -> Data {
-        var packet = Data()
+    deinit {
+        if socket >= 0 {
+            Darwin.close(socket)
+        }
+    }
+    
+    private func receiveLoop() async {
+        let bufferSize = 1024
+        var buffer = [UInt8](repeating: 0, count: bufferSize)
         
-        // Root Layer
-        packet.append(contentsOf: [0x00, 0x10]) // Preamble Size
-        packet.append(contentsOf: [0x00, 0x00]) // Post-amble Size
-        packet.append(contentsOf: "ASC-E1.17\0\0\0".utf8) // ACN Packet Identifier (12 bytes)
+        while !Task.isCancelled {
+            let bytesReceived = recv(socket, &buffer, bufferSize, 0)
+            
+            if bytesReceived > 0 {
+                let data = Data(buffer.prefix(bytesReceived))
+                await processPacket(data)
+            }
+            
+            // Small delay to prevent tight loop
+            try? await Task.sleep(nanoseconds: 1_000_000) // 1ms
+        }
+    }
+    
+    private func processPacket(_ data: Data) async {
+        switch `protocol` {
+        case .artnet:
+            await processArtNetPacket(data)
+        case .sacn:
+            await processSACNPacket(data)
+        }
+    }
+    
+    private func processArtNetPacket(_ data: Data) async {
+        guard data.count >= 18 else { return }
         
-        let rootFlags: UInt16 = 0x7000 | UInt16(638) // Flags and PDU length
-        packet.append(UInt8((rootFlags >> 8) & 0xFF))
-        packet.append(UInt8(rootFlags & 0xFF))
+        // Check Art-Net header
+        let header = String(data: data.prefix(8), encoding: .utf8)
+        guard header == "Art-Net\0" else { return }
         
-        packet.append(contentsOf: [0x00, 0x00, 0x00, 0x04]) // Root Vector (VECTOR_ROOT_E131_DATA)
+        // Check OpCode (should be 0x5000 for ArtDMX)
+        let opCode = UInt16(data[8]) | (UInt16(data[9]) << 8)
+        guard opCode == 0x5000 else { return }
         
-        // CID (Component Identifier) - 16 bytes UUID
-        let uuid = UUID()
-        packet.append(contentsOf: uuid.uuid.0.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.1.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.2.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.3.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.4.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.5.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.6.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.7.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.8.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.9.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.10.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.11.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.12.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.13.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.14.bigEndian.bytes)
-        packet.append(contentsOf: uuid.uuid.15.bigEndian.bytes)
+        // Get universe
+        let universeLow = Int(data[14])
+        let universeHigh = Int(data[15])
+        let universe = universeLow | (universeHigh << 8)
         
-        // Framing Layer
-        let framingFlags: UInt16 = 0x7000 | UInt16(610)
-        packet.append(UInt8((framingFlags >> 8) & 0xFF))
-        packet.append(UInt8(framingFlags & 0xFF))
+        // Get data length
+        let lengthHigh = Int(data[16])
+        let lengthLow = Int(data[17])
+        let length = (lengthHigh << 8) | lengthLow
         
-        packet.append(contentsOf: [0x00, 0x00, 0x00, 0x02]) // Framing Vector (VECTOR_E131_DATA_PACKET)
+        // Extract DMX data
+        let dmxStart = 18
+        let dmxEnd = min(dmxStart + length, data.count)
+        guard dmxEnd > dmxStart else { return }
         
-        // Source Name (64 bytes)
-        let sourceName = "Govee Mac DMX".padding(toLength: 64, withPad: "\0", startingAt: 0)
-        packet.append(contentsOf: sourceName.utf8.prefix(64))
+        let dmxData = Array(data[dmxStart..<dmxEnd])
         
-        packet.append(100) // Priority
-        packet.append(contentsOf: [0x00, 0x00]) // Synchronization Address (reserved)
+        // Update universe
+        await universeManager.updateUniverse(universe, channels: dmxData)
         
-        sequenceNumber = sequenceNumber &+ 1
-        packet.append(sequenceNumber) // Sequence Number
-        packet.append(0) // Options
-        packet.append(UInt8((universe >> 8) & 0xFF)) // Universe high byte
-        packet.append(UInt8(universe & 0xFF)) // Universe low byte
+        // Update devices
+        await updateDevicesFromDMX(universe: universe)
+    }
+    
+    private func processSACNPacket(_ data: Data) async {
+        guard data.count >= 126 else { return }
         
-        // DMP Layer
-        let dmpFlags: UInt16 = 0x7000 | UInt16(523)
-        packet.append(UInt8((dmpFlags >> 8) & 0xFF))
-        packet.append(UInt8(dmpFlags & 0xFF))
+        // Check ACN Packet Identifier
+        let identifier = String(data: data[4..<16], encoding: .utf8)
+        guard identifier?.hasPrefix("ASC-E1.17") == true else { return }
         
-        packet.append(0x02) // DMP Vector (VECTOR_DMP_SET_PROPERTY)
-        packet.append(0xa1) // Address Type & Data Type
-        packet.append(contentsOf: [0x00, 0x00]) // First Property Address
-        packet.append(contentsOf: [0x00, 0x01]) // Address Increment
+        // Get universe from framing layer
+        let universeHigh = Int(data[113])
+        let universeLow = Int(data[114])
+        let universe = (universeHigh << 8) | universeLow
         
-        let propertyCount = UInt16(data.count + 1)
-        packet.append(UInt8((propertyCount >> 8) & 0xFF))
-        packet.append(UInt8(propertyCount & 0xFF))
+        // DMX data starts at byte 126
+        let dmxStart = 126
+        guard data.count > dmxStart else { return }
         
-        packet.append(0) // START Code
-        packet.append(contentsOf: data.prefix(512))
+        let dmxData = Array(data[dmxStart...])
         
-        return packet
+        // Update universe
+        await universeManager.updateUniverse(universe, channels: dmxData)
+        
+        // Update devices
+        await updateDevicesFromDMX(universe: universe)
+    }
+    
+    private func updateDevicesFromDMX(universe: Int) async {
+        guard let controller = await MainActor.run(body: { controller }) else { return }
+        
+        let devices = await MainActor.run { controller.deviceStore.devices }
+        
+        for device in devices {
+            guard let mapping = device.dmxMapping,
+                  mapping.universe == universe else { continue }
+            
+            // Get channel values
+            let channelCount: Int
+            switch mapping.channelMode {
+            case .single: channelCount = 1
+            case .rgb: channelCount = 3
+            case .rgbw, .rgba, .rgbDimmer: channelCount = 4
+            case .extended: channelCount = 6
+            }
+            
+            let values = await universeManager.getChannelValues(universe, startChannel: mapping.startChannel, count: channelCount)
+            guard !values.isEmpty else { continue }
+            
+            // Apply to device based on channel mode
+            await applyDMXToDevice(device: device, mapping: mapping, values: values)
+        }
+    }
+    
+    private func applyDMXToDevice(device: GoveeDevice, mapping: DMXChannelMapping, values: [UInt8]) async {
+        guard let controller = await MainActor.run(body: { controller }) else { return }
+        
+        await MainActor.run {
+            Task {
+                switch mapping.channelMode {
+                case .single:
+                    // Single dimmer channel
+                    if values.count >= 1 {
+                        let brightness = Int(Double(values[0]) / 255.0 * 100.0)
+                        let isOn = values[0] > 0
+                        try? await controller.setDevicePower(device: device, on: isOn)
+                        if isOn {
+                            try? await controller.setDeviceBrightness(device: device, value: brightness)
+                        }
+                    }
+                    
+                case .rgb:
+                    // RGB channels
+                    if values.count >= 3 {
+                        let color = DeviceColor(r: Int(values[0]), g: Int(values[1]), b: Int(values[2]))
+                        let isOn = values[0] > 0 || values[1] > 0 || values[2] > 0
+                        try? await controller.setDevicePower(device: device, on: isOn)
+                        if isOn {
+                            try? await controller.setDeviceColor(device: device, color: color)
+                        }
+                    }
+                    
+                case .rgbw:
+                    // RGBW channels
+                    if values.count >= 4 {
+                        let color = DeviceColor(r: Int(values[0]), g: Int(values[1]), b: Int(values[2]))
+                        let isOn = values[0] > 0 || values[1] > 0 || values[2] > 0 || values[3] > 0
+                        try? await controller.setDevicePower(device: device, on: isOn)
+                        if isOn {
+                            try? await controller.setDeviceColor(device: device, color: color)
+                            // White channel could affect brightness
+                            let brightness = Int(Double(values[3]) / 255.0 * 100.0)
+                            if brightness > 0 {
+                                try? await controller.setDeviceBrightness(device: device, value: brightness)
+                            }
+                        }
+                    }
+                    
+                case .rgba:
+                    // RGBA channels (amber as brightness modifier)
+                    if values.count >= 4 {
+                        let color = DeviceColor(r: Int(values[0]), g: Int(values[1]), b: Int(values[2]))
+                        let isOn = values[0] > 0 || values[1] > 0 || values[2] > 0
+                        try? await controller.setDevicePower(device: device, on: isOn)
+                        if isOn {
+                            try? await controller.setDeviceColor(device: device, color: color)
+                        }
+                    }
+                    
+                case .rgbDimmer:
+                    // Dimmer + RGB channels
+                    if values.count >= 4 {
+                        let brightness = Int(Double(values[0]) / 255.0 * 100.0)
+                        let color = DeviceColor(r: Int(values[1]), g: Int(values[2]), b: Int(values[3]))
+                        let isOn = values[0] > 0
+                        try? await controller.setDevicePower(device: device, on: isOn)
+                        if isOn {
+                            try? await controller.setDeviceBrightness(device: device, value: brightness)
+                            try? await controller.setDeviceColor(device: device, color: color)
+                        }
+                    }
+                    
+                case .extended:
+                    // Dimmer + RGB + White + Amber
+                    if values.count >= 6 {
+                        let brightness = Int(Double(values[0]) / 255.0 * 100.0)
+                        let color = DeviceColor(r: Int(values[1]), g: Int(values[2]), b: Int(values[3]))
+                        let isOn = values[0] > 0
+                        try? await controller.setDevicePower(device: device, on: isOn)
+                        if isOn {
+                            try? await controller.setDeviceBrightness(device: device, value: brightness)
+                            try? await controller.setDeviceColor(device: device, color: color)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -925,157 +1005,23 @@ extension UInt16 {
 }
 
 struct DMXControl: DeviceControlProtocol {
-    let controller: DMXController
-    let universeManager: DMXUniverseManager
-    
-    private func updateDevice(_ device: GoveeDevice, updateBlock: @escaping ([UInt8]) -> [UInt8]) async throws {
-        guard let mapping = device.dmxMapping else { return }
-        
-        let currentData = await universeManager.getUniverse(mapping.universe)
-        let updatedData = updateBlock(currentData)
-        
-        await universeManager.setChannels(mapping.universe, startChannel: mapping.startChannel, values: updatedData)
-        try await controller.sendDMXData(universe: mapping.universe, channels: await universeManager.getUniverse(mapping.universe))
-    }
+    // This is no longer used as a control protocol since we're receiving, not sending
+    // But we keep it for compatibility
     
     func setPower(device: GoveeDevice, on: Bool) async throws {
-        try await updateDevice(device) { currentData in
-            guard let mapping = device.dmxMapping else { return [] }
-            
-            switch mapping.channelMode {
-            case .single:
-                return [on ? 255 : 0]
-            case .rgb:
-                // For RGB, set all channels to 0 or restore last color
-                return on ? [255, 255, 255] : [0, 0, 0]
-            case .rgbw, .rgba:
-                return on ? [255, 255, 255, 255] : [0, 0, 0, 0]
-            case .rgbDimmer:
-                return on ? [255, 255, 255, 255] : [0, 0, 0, 0]
-            case .extended:
-                return on ? [255, 255, 255, 255, 255, 255] : [0, 0, 0, 0, 0, 0]
-            }
-        }
+        // No-op - control comes from DMX input
     }
     
     func setBrightness(device: GoveeDevice, value: Int) async throws {
-        let dmxValue = UInt8(min(max(value, 0), 100) * 255 / 100)
-        
-        try await updateDevice(device) { currentData in
-            guard let mapping = device.dmxMapping else { return [] }
-            
-            switch mapping.channelMode {
-            case .single:
-                return [dmxValue]
-            case .rgb:
-                // For RGB without dimmer, scale all RGB channels
-                if currentData.count >= 3 {
-                    let r = currentData[0]
-                    let g = currentData[1]
-                    let b = currentData[2]
-                    return [
-                        UInt8(Double(r) * Double(dmxValue) / 255.0),
-                        UInt8(Double(g) * Double(dmxValue) / 255.0),
-                        UInt8(Double(b) * Double(dmxValue) / 255.0)
-                    ]
-                }
-                return [dmxValue, dmxValue, dmxValue]
-            case .rgbDimmer:
-                // Dimmer is first channel
-                var result = currentData
-                if result.count >= 4 {
-                    result[0] = dmxValue
-                } else {
-                    result = [dmxValue, 255, 255, 255]
-                }
-                return Array(result.prefix(4))
-            case .rgbw, .rgba:
-                // Scale all color channels
-                if currentData.count >= 4 {
-                    return currentData.enumerated().map { idx, val in
-                        UInt8(Double(val) * Double(dmxValue) / 255.0)
-                    }
-                }
-                return [dmxValue, dmxValue, dmxValue, dmxValue]
-            case .extended:
-                // First channel is usually dimmer
-                var result = currentData
-                if result.count >= 6 {
-                    result[0] = dmxValue
-                } else {
-                    result = [dmxValue, 255, 255, 255, 255, 255]
-                }
-                return Array(result.prefix(6))
-            }
-        }
+        // No-op - control comes from DMX input
     }
     
     func setColor(device: GoveeDevice, color: DeviceColor) async throws {
-        try await updateDevice(device) { currentData in
-            guard let mapping = device.dmxMapping else { return [] }
-            
-            switch mapping.channelMode {
-            case .single:
-                // Single channel can only do brightness, calculate from RGB
-                let brightness = (color.r + color.g + color.b) / 3
-                return [UInt8(brightness)]
-            case .rgb:
-                return [UInt8(color.r), UInt8(color.g), UInt8(color.b)]
-            case .rgbw:
-                // Calculate white channel from RGB
-                let white = min(color.r, color.g, color.b)
-                return [UInt8(color.r), UInt8(color.g), UInt8(color.b), UInt8(white)]
-            case .rgba:
-                return [UInt8(color.r), UInt8(color.g), UInt8(color.b), 0]
-            case .rgbDimmer:
-                // Keep existing dimmer value if available
-                let dimmer = currentData.count > 0 ? currentData[0] : 255
-                return [dimmer, UInt8(color.r), UInt8(color.g), UInt8(color.b)]
-            case .extended:
-                // Keep dimmer, set RGB, and additional channels
-                let dimmer = currentData.count > 0 ? currentData[0] : 255
-                return [dimmer, UInt8(color.r), UInt8(color.g), UInt8(color.b), 0, 0]
-            }
-        }
+        // No-op - control comes from DMX input
     }
     
     func setColorTemperature(device: GoveeDevice, value: Int) async throws {
-        // Color temperature control for DMX is complex and device-specific
-        // This is a basic implementation that adjusts white/amber balance
-        try await updateDevice(device) { currentData in
-            guard let mapping = device.dmxMapping else { return [] }
-            
-            // Map color temperature (2000-9000K) to warm/cool balance
-            let normalizedTemp = Double(min(max(value, 2000), 9000) - 2000) / 7000.0
-            let coolWhite = UInt8(normalizedTemp * 255.0)
-            let warmWhite = UInt8((1.0 - normalizedTemp) * 255.0)
-            
-            switch mapping.channelMode {
-            case .single:
-                return [UInt8((coolWhite + warmWhite) / 2)]
-            case .rgb:
-                // Approximate color temp with RGB
-                if normalizedTemp > 0.5 {
-                    return [coolWhite, coolWhite, 255]
-                } else {
-                    return [255, warmWhite, warmWhite]
-                }
-            case .rgbw:
-                return currentData.count >= 4 ? [currentData[0], currentData[1], currentData[2], UInt8((coolWhite + warmWhite) / 2)] : [255, 255, 255, 255]
-            case .rgba:
-                return currentData.count >= 4 ? [currentData[0], currentData[1], currentData[2], warmWhite] : [255, 255, 255, 128]
-            case .rgbDimmer:
-                let dimmer = currentData.count > 0 ? currentData[0] : 255
-                if normalizedTemp > 0.5 {
-                    return [dimmer, coolWhite, coolWhite, 255]
-                } else {
-                    return [dimmer, 255, warmWhite, warmWhite]
-                }
-            case .extended:
-                let dimmer = currentData.count > 0 ? currentData[0] : 255
-                return [dimmer, 255, 255, 255, coolWhite, warmWhite]
-            }
-        }
+        // No-op - control comes from DMX input
     }
 }
 
@@ -1086,8 +1032,7 @@ class GoveeController: ObservableObject {
     private let deviceStore: DeviceStore
     private let settings: SettingsStore
     private var pollingTask: Task<Void, Never>?
-    private var dmxController: DMXController?
-    private let dmxUniverseManager = DMXUniverseManager()
+    private var dmxReceiver: DMXReceiver?
     
     #if canImport(HomeKit)
     @available(macOS 10.15, *)
@@ -1105,10 +1050,15 @@ class GoveeController: ObservableObject {
         #endif
         
         if settings.dmxEnabled {
-            self.dmxController = DMXController(
-                protocol: settings.dmxProtocol,
-                broadcastAddress: settings.dmxBroadcastAddress
-            )
+            let receiver = DMXReceiver(protocol: settings.dmxProtocol)
+            receiver.controller = self
+            self.dmxReceiver = receiver
+            do {
+                try receiver.start()
+                print("DMX Receiver started on \(settings.dmxProtocol.rawValue)")
+            } catch {
+                print("Failed to start DMX receiver: \(error)")
+            }
         }
         
         startPolling()
@@ -1116,6 +1066,7 @@ class GoveeController: ObservableObject {
     
     deinit {
         pollingTask?.cancel()
+        dmxReceiver?.stop()
     }
     
     private func startPolling() {
@@ -1196,9 +1147,8 @@ class GoveeController: ObservableObject {
     
     private func getControl(for device: GoveeDevice) -> DeviceControlProtocol? {
         // DMX has highest priority for devices with DMX mapping
-        if settings.dmxEnabled, device.transports.contains(.dmx), device.dmxMapping != nil, let dmxCtrl = dmxController {
-            return DMXControl(controller: dmxCtrl, universeManager: dmxUniverseManager)
-        }
+        // DMX devices are controlled via incoming DMX signals, not direct control
+        // So we skip them here and fall through to other transports
         
         if settings.prefersLan, device.transports.contains(.lan), let ip = device.ipAddress {
             return LANControl(deviceIP: ip)
@@ -1223,6 +1173,59 @@ class GoveeController: ObservableObject {
     
     private var selectedDevice: GoveeDevice? {
         deviceStore.devices.first { $0.id == deviceStore.selectedDeviceID }
+    }
+    
+    // Public methods for DMX receiver to control specific devices
+    func setDevicePower(device: GoveeDevice, on: Bool) async throws {
+        // Don't use DMX control to avoid feedback loop
+        var control: DeviceControlProtocol?
+        
+        if settings.prefersLan, device.transports.contains(.lan), let ip = device.ipAddress {
+            control = LANControl(deviceIP: ip)
+        } else if device.transports.contains(.cloud), !settings.goveeApiKey.isEmpty {
+            control = CloudControl(apiKey: settings.goveeApiKey)
+        }
+        
+        guard let ctrl = control else { return }
+        try await ctrl.setPower(device: device, on: on)
+        
+        if let idx = deviceStore.devices.firstIndex(where: { $0.id == device.id }) {
+            deviceStore.devices[idx].isOn = on
+        }
+    }
+    
+    func setDeviceBrightness(device: GoveeDevice, value: Int) async throws {
+        var control: DeviceControlProtocol?
+        
+        if settings.prefersLan, device.transports.contains(.lan), let ip = device.ipAddress {
+            control = LANControl(deviceIP: ip)
+        } else if device.transports.contains(.cloud), !settings.goveeApiKey.isEmpty {
+            control = CloudControl(apiKey: settings.goveeApiKey)
+        }
+        
+        guard let ctrl = control else { return }
+        try await ctrl.setBrightness(device: device, value: value)
+        
+        if let idx = deviceStore.devices.firstIndex(where: { $0.id == device.id }) {
+            deviceStore.devices[idx].brightness = value
+        }
+    }
+    
+    func setDeviceColor(device: GoveeDevice, color: DeviceColor) async throws {
+        var control: DeviceControlProtocol?
+        
+        if settings.prefersLan, device.transports.contains(.lan), let ip = device.ipAddress {
+            control = LANControl(deviceIP: ip)
+        } else if device.transports.contains(.cloud), !settings.goveeApiKey.isEmpty {
+            control = CloudControl(apiKey: settings.goveeApiKey)
+        }
+        
+        guard let ctrl = control else { return }
+        try await ctrl.setColor(device: device, color: color)
+        
+        if let idx = deviceStore.devices.firstIndex(where: { $0.id == device.id }) {
+            deviceStore.devices[idx].color = color
+        }
     }
     
     func setPower(on: Bool) async {
