@@ -6,6 +6,7 @@ import Foundation
 struct ContentView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var deviceStore: DeviceStore
+    @EnvironmentObject private var profileStore: DMXProfileStore
     @EnvironmentObject private var controller: GoveeController
 
     @State private var showSettings = false
@@ -21,6 +22,8 @@ struct ContentView: View {
     @State private var color: Color = .white
     @State private var colorTemperature: Double = 4000
     @State private var showColorPicker = false
+    @State private var showDMXConfig = false
+    @State private var dmxConfigDevice: GoveeDevice?
 
     var body: some View {
         NavigationSplitView {
@@ -41,6 +44,14 @@ struct ContentView: View {
         .sheet(isPresented: $showAddDevice) { addDeviceSheet }
         .sheet(isPresented: $showAddGroup) { addGroupSheet }
         .sheet(isPresented: $showColorPicker) { colorPickerSheet }
+        .sheet(isPresented: $showDMXConfig) {
+            if let device = dmxConfigDevice {
+                DMXConfigSheet(device: device)
+                    .environmentObject(deviceStore)
+                    .environmentObject(profileStore)
+                    .environmentObject(settings)
+            }
+        }
         .task { await controller.refresh() }
     }
 
@@ -93,6 +104,7 @@ struct ContentView: View {
     }
 
     private func transportBadge(_ d: GoveeDevice) -> String {
+        if d.transports.contains(.dmx) { return "DMX" }
         if d.transports.contains(.lan) { return "LAN" }
         if d.transports.contains(.homeKit) { return "Home" }
         if d.transports.contains(.cloud) { return "Cloud" }
@@ -284,7 +296,22 @@ struct ContentView: View {
 
     private func editGroup(_ group: DeviceGroup) { newGroupName = group.name; selectedMembers = Set(group.memberIDs); showAddGroup = true }
     private func deleteGroup(_ id: String) { deviceStore.deleteGroup(id) }
-    private func addToGroupContext(for device: GoveeDevice) -> some View { Menu("Add to group") { ForEach(deviceStore.groups) { group in Button(group.name) { addDevice(device.id, toGroup: group.id) } } } }
+    private func addToGroupContext(for device: GoveeDevice) -> some View {
+        Group {
+            Menu("Add to group") {
+                ForEach(deviceStore.groups) { group in
+                    Button(group.name) { addDevice(device.id, toGroup: group.id) }
+                }
+            }
+            if settings.dmxEnabled {
+                Divider()
+                Button("Configure DMX") {
+                    dmxConfigDevice = device
+                    showDMXConfig = true
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Device Discovery Sheet
@@ -561,9 +588,36 @@ struct SettingsView: View {
                 TextField("Base URL (https://homeassistant.local:8123)", text: $settings.haBaseURL)
                 SecureField("Long-Lived Token", text: $settings.haToken)
             }
+            Section(header: Text("DMX Control (ArtNet/sACN)")) {
+                Toggle("Enable DMX Receiver", isOn: $settings.dmxEnabled)
+                if settings.dmxEnabled {
+                    Picker("Protocol", selection: $settings.dmxProtocol) {
+                        Text("ArtNet").tag(DMXProtocolType.artnet)
+                        Text("sACN (E1.31)").tag(DMXProtocolType.sacn)
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("The app will listen for incoming DMX packets and control mapped Govee devices.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.blue)
+                            Text("Port: \(settings.dmxProtocol == .artnet ? "6454" : "5568")")
+                                .font(.caption)
+                        }
+                        
+                        Text("Configure DMX channel mappings for each device via right-click menu.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
         .padding(20)
-        .frame(minWidth: 500, minHeight: 340)
+        .frame(minWidth: 500, minHeight: settings.dmxEnabled ? 520 : 340)
     }
 }
 
@@ -608,11 +662,359 @@ struct WelcomeView: View {
     }
 }
 
+// MARK: - DMX Configuration Sheet
+
+struct DMXConfigSheet: View {
+    @EnvironmentObject private var deviceStore: DeviceStore
+    @EnvironmentObject private var profileStore: DMXProfileStore
+    @EnvironmentObject private var settings: SettingsStore
+    @Environment(\.dismiss) private var dismiss
+    
+    let device: GoveeDevice
+    
+    @State private var universe: Int
+    @State private var startChannel: Int
+    @State private var selectedProfileID: String
+    @State private var showCustomProfileEditor = false
+    @State private var showProfileManager = false
+    
+    init(device: GoveeDevice) {
+        self.device = device
+        _universe = State(initialValue: device.dmxMapping?.universe ?? 0)
+        _startChannel = State(initialValue: device.dmxMapping?.startChannel ?? 1)
+        _selectedProfileID = State(initialValue: device.dmxMapping?.profileID ?? "builtin_rgbDimmer")
+    }
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Configure DMX for \(device.name)")
+                .font(.title2)
+                .bold()
+            
+            Form {
+                Section(header: Text("DMX Address")) {
+                    Stepper("Universe: \(universe)", value: $universe, in: 0...32767)
+                    Stepper("Start Channel: \(startChannel)", value: $startChannel, in: 1...512)
+                }
+                
+                Section(header: Text("DMX Profile")) {
+                    Picker("Profile", selection: $selectedProfileID) {
+                        ForEach(profileStore.allProfiles) { profile in
+                            Text(profile.name).tag(profile.id)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    
+                    HStack {
+                        Button("Create Custom Profile") {
+                            showCustomProfileEditor = true
+                        }
+                        
+                        Button("Manage Profiles") {
+                            showProfileManager = true
+                        }
+                    }
+                }
+                
+                if let profile = profileStore.getProfile(id: selectedProfileID) {
+                    Section(header: Text("Channel Layout")) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(profile.channels) { channel in
+                                HStack {
+                                    Text("Ch \(startChannel + channel.channelNumber):")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                        .frame(width: 60, alignment: .leading)
+                                    Text(channel.function.rawValue)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            
+                            Divider()
+                            
+                            HStack {
+                                Text("Total Channels:")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                Text("\(profile.channelCount)")
+                                    .font(.caption)
+                                Spacer()
+                                Text("Range:")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                Text("\(startChannel) - \(endChannel(profile: profile))")
+                                    .font(.caption)
+                            }
+                            
+                            if endChannel(profile: profile) > 512 {
+                                Text("⚠️ Warning: End channel exceeds DMX universe limit (512)")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                }
+                
+                Section(header: Text("Protocol")) {
+                    HStack {
+                        Text("Current protocol:")
+                            .font(.caption)
+                        Text(settings.dmxProtocol.rawValue)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                    }
+                    Text("Change protocol in Settings")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(height: 450)
+            
+            HStack {
+                Button("Cancel") { dismiss() }
+                Spacer()
+                Button("Remove DMX") {
+                    removeDMXMapping()
+                    dismiss()
+                }
+                .foregroundColor(.red)
+                .disabled(device.dmxMapping == nil)
+                
+                Button("Save") {
+                    saveDMXMapping()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 550)
+        .sheet(isPresented: $showCustomProfileEditor) {
+            CustomProfileEditor(profileStore: profileStore)
+                .environmentObject(profileStore)
+        }
+        .sheet(isPresented: $showProfileManager) {
+            ProfileManagerView()
+                .environmentObject(profileStore)
+        }
+    }
+    
+    private func endChannel(profile: DMXProfile) -> Int {
+        startChannel + profile.channelCount - 1
+    }
+    
+    private func saveDMXMapping() {
+        let mapping = DMXChannelMapping(
+            universe: universe,
+            startChannel: startChannel,
+            profileID: selectedProfileID
+        )
+        
+        if let index = deviceStore.devices.firstIndex(where: { $0.id == device.id }) {
+            var updatedDevice = deviceStore.devices[index]
+            updatedDevice.dmxMapping = mapping
+            updatedDevice.transports.insert(.dmx)
+            deviceStore.devices[index] = updatedDevice
+        }
+    }
+    
+    private func removeDMXMapping() {
+        if let index = deviceStore.devices.firstIndex(where: { $0.id == device.id }) {
+            var updatedDevice = deviceStore.devices[index]
+            updatedDevice.dmxMapping = nil
+            updatedDevice.transports.remove(.dmx)
+            deviceStore.devices[index] = updatedDevice
+        }
+    }
+}
+
+// MARK: - Custom Profile Editor
+
+struct CustomProfileEditor: View {
+    @EnvironmentObject private var profileStore: DMXProfileStore
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var profileName: String = ""
+    @State private var channels: [DMXCustomChannel] = [
+        DMXCustomChannel(channelNumber: 0, function: .dimmer)
+    ]
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Create Custom DMX Profile")
+                .font(.title2)
+                .bold()
+            
+            Form {
+                Section(header: Text("Profile Name")) {
+                    TextField("Profile Name", text: $profileName)
+                        .textFieldStyle(.roundedBorder)
+                }
+                
+                Section(header: HStack {
+                    Text("Channel Mapping")
+                    Spacer()
+                    Button(action: addChannel) {
+                        Label("Add Channel", systemImage: "plus.circle")
+                    }
+                }) {
+                    if channels.isEmpty {
+                        Text("No channels defined")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding()
+                    } else {
+                        ForEach(channels.indices, id: \.self) { index in
+                            HStack(spacing: 12) {
+                                Text("Ch \(index + 1):")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .frame(width: 50, alignment: .leading)
+                                
+                                Picker("Function", selection: $channels[index].function) {
+                                    ForEach(DMXChannelFunction.allCases, id: \.self) { function in
+                                        Text(function.rawValue).tag(function)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 120)
+                                
+                                Spacer()
+                                
+                                Button(action: { deleteChannel(at: index) }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+            .frame(height: 400)
+            
+            HStack {
+                Button("Cancel") { dismiss() }
+                Spacer()
+                Button("Create Profile") {
+                    createProfile()
+                    dismiss()
+                }
+                .disabled(profileName.trimmingCharacters(in: .whitespaces).isEmpty || channels.isEmpty)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 500)
+    }
+    
+    private func addChannel() {
+        let nextChannel = channels.count
+        channels.append(DMXCustomChannel(channelNumber: nextChannel, function: .unused))
+    }
+    
+    private func deleteChannel(at index: Int) {
+        channels.remove(at: index)
+        // Renumber channels
+        for i in 0..<channels.count {
+            channels[i].channelNumber = i
+        }
+    }
+    
+    private func createProfile() {
+        let profile = DMXProfile(
+            name: profileName,
+            channels: channels,
+            isBuiltIn: false
+        )
+        profileStore.addProfile(profile)
+    }
+}
+
+// MARK: - Profile Manager
+
+struct ProfileManagerView: View {
+    @EnvironmentObject private var profileStore: DMXProfileStore
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Manage DMX Profiles")
+                .font(.title2)
+                .bold()
+            
+            List {
+                Section(header: Text("Built-in Profiles")) {
+                    ForEach(DMXProfile.builtInProfiles) { profile in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(profile.name)
+                                    .font(.headline)
+                                Text("\(profile.channelCount) channels")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "lock.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                
+                Section(header: Text("Custom Profiles")) {
+                    if profileStore.customProfiles.isEmpty {
+                        Text("No custom profiles")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding()
+                    } else {
+                        ForEach(profileStore.customProfiles) { profile in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(profile.name)
+                                        .font(.headline)
+                                    Text("\(profile.channelCount) channels")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    
+                                    // Show channel functions
+                                    Text(profile.channels.map { $0.function.rawValue }.joined(separator: ", "))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Button(action: { profileStore.deleteProfile(id: profile.id) }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(height: 400)
+            
+            Button("Done") { dismiss() }
+                .keyboardShortcut(.defaultAction)
+        }
+        .padding(24)
+        .frame(width: 500)
+    }
+}
+
 #Preview {
     let settings = SettingsStore()
     let store = DeviceStore()
+    let profiles = DMXProfileStore()
     return WelcomeView()
         .environmentObject(settings)
         .environmentObject(store)
-        .environmentObject(GoveeController(deviceStore: store, settings: settings))
+        .environmentObject(profiles)
+        .environmentObject(GoveeController(deviceStore: store, settings: settings, profileStore: profiles))
 }

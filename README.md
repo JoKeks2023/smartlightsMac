@@ -15,6 +15,7 @@ A powerful, native macOS app to control your Govee smart lights with support for
 - **🏠 LAN Control** - Automatic mDNS/Bonjour discovery for local network control (faster response)
 - **🍎 HomeKit/Matter** - Native integration with Apple Home devices
 - **🏡 Home Assistant** - REST API integration for advanced automation
+- **🎭 DMX Control** - ArtNet and sACN receiver for professional lighting control
 
 ### 🎨 User Interface
 - **Modern macOS Design** - Native SwiftUI interface with gradients and materials
@@ -88,6 +89,12 @@ A powerful, native macOS app to control your Govee smart lights with support for
    - Generate a Long-Lived Access Token in HA
    - Paste token in Settings
 
+5. **DMX Control** (Optional)
+   - Enable "DMX Receiver" in Settings
+   - Select protocol: ArtNet or sACN
+   - Configure channel mappings for each device
+   - See [DMX_SETUP.md](DMX_SETUP.md) for detailed setup guide
+
 ## 📖 Usage
 
 ### Controlling Devices
@@ -112,6 +119,12 @@ A powerful, native macOS app to control your Govee smart lights with support for
 - `⌘O` - Open main window
 - `⌘,` - Open Settings
 - `⌘Q` - Quit
+
+### DMX Control
+- Right-click any device → **Configure DMX**
+- Set universe, start channel, and channel mode
+- Use lighting software (QLC+, LightKey, etc.) to send DMX
+- See [DMX_SETUP.md](DMX_SETUP.md) for complete guide
 
 ## 🏗️ Architecture
 
@@ -220,6 +233,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🗺️ Roadmap
 
+- [x] DMX control (ArtNet/sACN)
 - [ ] Scenes and automation support
 - [ ] Custom color presets
 - [ ] Schedule/timer functionality
