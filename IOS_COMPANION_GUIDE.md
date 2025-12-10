@@ -1,11 +1,21 @@
 # iOS Companion App Integration Guide
 
-## 🌉 Bridge Architecture
+## 🌉 Multi-Transport Bridge Architecture
 
-The macOS app now includes a comprehensive bridge infrastructure (`CloudSyncManager`) that enables seamless data synchronization with an iOS companion app. This bridge uses two complementary technologies:
+The macOS app now includes a comprehensive multi-transport bridge infrastructure that enables seamless data synchronization with an iOS companion app using **THREE** synchronization methods:
 
-1. **App Groups** - For immediate local data sharing (same iCloud account, instant sync)
-2. **CloudKit** - For cross-device cloud synchronization (works across all user devices)
+1. **☁️ CloudKit** - Internet-based sync across all devices (anywhere in the world)
+2. **📡 Local Network (Bonjour)** - Fast sync over WiFi (same network, no internet needed)
+3. **📶 Bluetooth** - Direct device-to-device sync (close proximity, works offline)
+4. **📦 App Groups** - Instant sync on same device (between app and widgets)
+
+### Transport Selection Strategy
+
+The app intelligently uses multiple transports simultaneously:
+- **Primary**: CloudKit for reliable cross-device sync
+- **Fast Path**: Local Network for instant updates when on same WiFi
+- **Offline**: Bluetooth for sync without internet or WiFi
+- **Widget**: App Groups for same-device data sharing
 
 ## 📋 Prerequisites for iOS App
 
@@ -15,13 +25,16 @@ The macOS app now includes a comprehensive bridge infrastructure (`CloudSyncMana
 1. App Groups: group.com.govee.mac
 2. iCloud: CloudKit container "iCloud.com.govee.smartlights"
 3. Background Modes: Remote notifications (for CloudKit sync)
+4. Local Network: For Bonjour discovery
+5. Bluetooth: For Bluetooth sync
 ```
 
 ### 2. Required Files to Copy
 Copy these files from the macOS project to your iOS project:
 
 - `Govee Mac/GoveeModels.swift` - Core data models (GoveeDevice, DeviceGroup, etc.)
-- `Govee Mac/Services/CloudSyncManager.swift` - Sync infrastructure
+- `Govee Mac/Services/CloudSyncManager.swift` - CloudKit + App Groups sync
+- `Govee Mac/Services/MultiTransportSyncManager.swift` - ⭐ NEW: Multi-transport coordinator
 - `Govee Mac/Services/APIKeyKeychain.swift` - Secure credential storage
 
 ## 🔧 Integration Steps
@@ -34,6 +47,7 @@ Copy these files from the macOS project to your iOS project:
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- CloudKit -->
     <key>com.apple.developer.icloud-container-identifiers</key>
     <array>
         <string>iCloud.com.govee.smartlights</string>
@@ -42,15 +56,38 @@ Copy these files from the macOS project to your iOS project:
     <array>
         <string>CloudKit</string>
     </array>
+    
+    <!-- App Groups -->
     <key>com.apple.security.application-groups</key>
     <array>
         <string>group.com.govee.mac</string>
     </array>
+    
+    <!-- Bluetooth -->
+    <key>com.apple.developer.networking.multipath</key>
+    <true/>
 </dict>
 </plist>
 ```
 
-### Step 2: Initialize Sync Manager
+**Info.plist Additions:**
+```xml
+<!-- Local Network -->
+<key>NSLocalNetworkUsageDescription</key>
+<string>Connect to your Mac for instant sync over local network</string>
+<key>NSBonjourServices</key>
+<array>
+    <string>_smartlights._tcp</string>
+</array>
+
+<!-- Bluetooth -->
+<key>NSBluetoothAlwaysUsageDescription</key>
+<string>Connect to your Mac via Bluetooth for offline sync</string>
+<key>NSBluetoothPeripheralUsageDescription</key>
+<string>Connect to your Mac via Bluetooth for offline sync</string>
+```
+
+### Step 2: Initialize Multi-Transport Sync Manager
 
 **In your iOS App's main file:**
 ```swift
@@ -58,7 +95,7 @@ import SwiftUI
 
 @main
 struct GoveeIOSApp: App {
-    @StateObject private var syncManager = CloudSyncManager.shared
+    @StateObject private var syncManager = UnifiedSyncManager.shared
     @StateObject private var deviceStore = DeviceStore()
     
     var body: some Scene {
@@ -67,36 +104,59 @@ struct GoveeIOSApp: App {
                 .environmentObject(syncManager)
                 .environmentObject(deviceStore)
                 .task {
-                    // Load devices from App Groups on launch
-                    if let devices = syncManager.loadDevicesFromAppGroups() {
-                        deviceStore.replaceAll(devices)
-                    }
-                    
-                    // Optionally sync from CloudKit
-                    if await syncManager.checkCloudKitAvailability() {
-                        do {
-                            let cloudDevices = try await syncManager.fetchDevicesFromCloud()
-                            // Merge with local devices
-                            deviceStore.replaceAll(cloudDevices)
-                        } catch {
-                            print("CloudKit sync failed: \(error)")
-                        }
-                    }
+                    await setupSync()
                 }
+        }
+    }
+    
+    private func setupSync() async {
+        // Enable all transport methods
+        do {
+            // CloudKit (internet-based)
+            try syncManager.enableTransport(.cloud)
+            
+            // Local Network (WiFi)
+            try syncManager.enableTransport(.localNetwork, isServer: false)
+            
+            // Bluetooth (close proximity)
+            try syncManager.enableTransport(.bluetooth, isServer: false)
+            
+            // App Groups (same device)
+            try syncManager.enableTransport(.appGroups)
+            
+            print("All sync transports enabled")
+        } catch {
+            print("Sync setup error: \(error)")
+        }
+        
+        // Load initial data
+        if let devices = syncManager.cloudSync.loadDevicesFromAppGroups() {
+            deviceStore.replaceAll(devices)
+        }
+        
+        // Listen for sync updates
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("DevicesUpdated"),
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let devices = notification.object as? [GoveeDevice] {
+                deviceStore.replaceAll(devices)
+            }
         }
     }
 }
 ```
 
-### Step 3: Create iOS UI
+### Step 3: Create iOS UI with Sync Status
 
-**Simple Device List View:**
+**Device List with Connection Indicator:**
 ```swift
 import SwiftUI
 
 struct DeviceListView: View {
     @EnvironmentObject var deviceStore: DeviceStore
-    @EnvironmentObject var syncManager: CloudSyncManager
+    @EnvironmentObject var syncManager: UnifiedSyncManager
     
     var body: some View {
         NavigationView {

@@ -1486,6 +1486,7 @@ class GoveeController: ObservableObject {
     private let settings: SettingsStore
     private var pollingTask: Task<Void, Never>?
     private var dmxReceiver: DMXReceiver?
+    private var remoteControlHandler: RemoteControlHandler?
     
     #if canImport(HomeKit)
     @available(macOS 10.15, *)
@@ -1514,6 +1515,13 @@ class GoveeController: ObservableObject {
                 print("Failed to start DMX receiver: \(error)")
             }
         }
+        
+        // Initialize remote control handler for iOS app
+        self.remoteControlHandler = RemoteControlHandler(
+            controller: self,
+            deviceStore: deviceStore,
+            settingsStore: settings
+        )
         
         startPolling()
     }
