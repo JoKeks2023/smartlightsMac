@@ -52,7 +52,7 @@ enum APIKeyKeychain {
 // MARK: - Models
 
 enum TransportKind: String, Codable, Hashable {
-    case cloud, lan, homeKit, homeAssistant, dmx
+    case cloud, lan, homeKit, homeAssistant, dmx, hue, wled, lifx
 }
 
 enum DMXProtocolType: String, Codable, Hashable {
@@ -272,6 +272,14 @@ final class SettingsStore: ObservableObject {
     @Published var dmxProtocol: DMXProtocolType {
         didSet { UserDefaults.standard.set(dmxProtocol.rawValue, forKey: "dmxProtocol") }
     }
+    // Dictionary to store Hue username (API key) per bridge IP
+    @Published var hueBridgeCredentials: [String: String] = [:] {
+        didSet {
+            if let encoded = try? JSONEncoder().encode(hueBridgeCredentials) {
+                UserDefaults.standard.set(encoded, forKey: "hueBridgeCredentials")
+            }
+        }
+    }
     
     init() {
         // Migrate from UserDefaults to Keychain
@@ -288,6 +296,12 @@ final class SettingsStore: ObservableObject {
         self.dmxEnabled = UserDefaults.standard.object(forKey: "dmxEnabled") as? Bool ?? false
         let protocolString = UserDefaults.standard.string(forKey: "dmxProtocol") ?? DMXProtocolType.artnet.rawValue
         self.dmxProtocol = DMXProtocolType(rawValue: protocolString) ?? .artnet
+        
+        // Load Hue bridge credentials
+        if let data = UserDefaults.standard.data(forKey: "hueBridgeCredentials"),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+            self.hueBridgeCredentials = decoded
+        }
     }
 }
 
@@ -343,8 +357,13 @@ final class DeviceStore: ObservableObject {
     @Published var selectedDeviceID: String?
     @Published var selectedGroupID: String?
     @Published var groups: [DeviceGroup] = [] {
-        didSet { saveGroups() }
+        didSet { 
+            saveGroups()
+            CloudSyncManager.shared.saveGroupsToAppGroups(groups)
+        }
     }
+    
+    private let syncManager = CloudSyncManager.shared
     
     init() { loadGroups() }
     
@@ -362,10 +381,24 @@ final class DeviceStore: ObservableObject {
     }
     
     private func saveDevicesToSharedContainer() {
-        if let sharedDefaults = UserDefaults(suiteName: "group.com.govee.mac"),
-           let encoded = try? JSONEncoder().encode(devices) {
-            sharedDefaults.set(encoded, forKey: "cachedDevices")
-        }
+        // Save to App Groups via CloudSyncManager
+        syncManager.saveDevicesToAppGroups(devices)
+    }
+    
+    /// Sync devices and groups to iCloud (optional)
+    func syncToCloud() async throws {
+        try await syncManager.performFullSync(devices: devices, groups: groups)
+    }
+    
+    /// Load devices from iCloud (optional)
+    func loadFromCloud() async throws {
+        let cloudDevices = try await syncManager.fetchDevicesFromCloud()
+        let cloudGroups = try await syncManager.fetchGroupsFromCloud()
+        
+        devices = cloudDevices
+        groups = cloudGroups
+        saveDevicesToSharedContainer()
+        saveGroups()
     }
     
     func addGroup(name: String, memberIDs: [String]) {
@@ -591,16 +624,30 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
         guard let addresses = sender.addresses, !addresses.isEmpty,
               let ipAddress = self.extractIPAddress(from: addresses[0]) else { return }
         
+        // Determine transport type based on service type
+        var transport: TransportKind = .lan
+        let serviceType = sender.type
+        
+        if serviceType.contains("_wled") {
+            transport = .wled
+        } else if serviceType.contains("_lifx") {
+            transport = .lifx
+        } else if serviceType.contains("_govee") {
+            transport = .lan
+        }
+        // Note: Hue devices broadcast as _hap._tcp. (HomeKit) but we discover them
+        // separately via HueBridgeDiscovery using the Hue cloud discovery service
+        
         let device = GoveeDevice(
-            id: "lan-\(sender.name)-\(ipAddress)",
+            id: "\(transport.rawValue)-\(sender.name)-\(ipAddress)",
             name: sender.name,
             model: nil,
             ipAddress: ipAddress,
             online: true,
             supportsBrightness: true,
             supportsColor: true,
-            supportsColorTemperature: false,
-            transports: [.lan],
+            supportsColorTemperature: transport == .hue || transport == .wled,
+            transports: [transport],
             isOn: nil,
             brightness: nil,
             color: nil,
@@ -677,13 +724,13 @@ class HomeKitManager: NSObject, ObservableObject, HMHomeManagerDelegate {
         try? await Task.sleep(nanoseconds: 500_000_000)
         
         guard let home = homeManager.primaryHome else { return [] }
-        let goveeAccessories = home.accessories.filter { acc in
-            acc.name.lowercased().contains("govee") ||
-            acc.manufacturer?.lowercased().contains("govee") == true ||
-            acc.manufacturer?.lowercased().contains("ihoment") == true
+        // Discover ALL HomeKit accessories with light services, not just Govee
+        // This enables support for Philips Hue, LIFX, Nanoleaf, and other HomeKit lights
+        let lightAccessories = home.accessories.filter { acc in
+            acc.services.contains { $0.serviceType == HMServiceTypeLightbulb }
         }
         
-        return goveeAccessories.compactMap { accessory in
+        return lightAccessories.compactMap { accessory in
             guard let lightService = accessory.services.first(where: { $0.serviceType == HMServiceTypeLightbulb }) else { return nil }
             
             let supportsBrightness = lightService.characteristics.contains { $0.characteristicType == HMCharacteristicTypeBrightness }
@@ -808,33 +855,33 @@ struct HomeAssistantDiscovery: DeviceDiscoveryProtocol {
             guard let entityId = obj["entity_id"] as? String, entityId.hasPrefix("light.") else { continue }
             if let attr = obj["attributes"] as? [String: Any] {
                 let friendly = (attr["friendly_name"] as? String) ?? entityId
-                if friendly.lowercased().contains("govee") {
-                    let supportsBrightness = (attr["supported_features"] as? Int ?? 0) & 1 == 1
-                    let modes = (attr["supported_color_modes"] as? [String])?.map { $0.lowercased() } ?? []
-                    let supportsColor = modes.contains { ["rgb","hs","xy"].contains($0) }
-                    let supportsCT = modes.contains("color_temp")
-                    
-                    let state = obj["state"] as? String
-                    let isOn = state == "on"
-                    let brightness = attr["brightness"] as? Int
-                    let brightnessPercent = brightness.map { Int(Double($0) / 255.0 * 100.0) }
-                    
-                    devices.append(GoveeDevice(
-                        id: entityId,
-                        name: friendly,
-                        model: nil,
-                        ipAddress: nil,
-                        online: true,
-                        supportsBrightness: supportsBrightness,
-                        supportsColor: supportsColor,
-                        supportsColorTemperature: supportsCT,
-                        transports: [.homeAssistant],
-                        isOn: isOn,
-                        brightness: brightnessPercent,
-                        color: nil,
-                        colorTemperature: nil
-                    ))
-                }
+                // Accept all light entities from Home Assistant (not just Govee)
+                // This allows control of Hue, LIFX, and other brands via HA
+                let supportsBrightness = (attr["supported_features"] as? Int ?? 0) & 1 == 1
+                let modes = (attr["supported_color_modes"] as? [String])?.map { $0.lowercased() } ?? []
+                let supportsColor = modes.contains { ["rgb","hs","xy"].contains($0) }
+                let supportsCT = modes.contains("color_temp")
+                
+                let state = obj["state"] as? String
+                let isOn = state == "on"
+                let brightness = attr["brightness"] as? Int
+                let brightnessPercent = brightness.map { Int(Double($0) / 255.0 * 100.0) }
+                
+                devices.append(GoveeDevice(
+                    id: entityId,
+                    name: friendly,
+                    model: nil,
+                    ipAddress: nil,
+                    online: true,
+                    supportsBrightness: supportsBrightness,
+                    supportsColor: supportsColor,
+                    supportsColorTemperature: supportsCT,
+                    transports: [.homeAssistant],
+                    isOn: isOn,
+                    brightness: brightnessPercent,
+                    color: nil,
+                    colorTemperature: nil
+                ))
             }
         }
         return devices
@@ -1185,6 +1232,251 @@ struct DMXControl: DeviceControlProtocol {
     }
 }
 
+// MARK: - Philips Hue Bridge Implementation
+
+struct HueBridgeDiscovery: DeviceDiscoveryProtocol {
+    func refreshDevices() async throws -> [GoveeDevice] {
+        // Discover bridges using mDNS and Hue cloud discovery
+        let bridges = try await discoverBridges()
+        
+        var devices: [GoveeDevice] = []
+        for bridge in bridges {
+            // Get lights from each bridge
+            let lights = try? await getLightsFromBridge(bridge)
+            if let lights = lights {
+                devices.append(contentsOf: lights)
+            }
+        }
+        return devices
+    }
+    
+    private func discoverBridges() async throws -> [(ip: String, id: String)] {
+        // Try mDNS discovery first via _hue._tcp service
+        // Then fall back to Hue cloud discovery API
+        var bridges: [(ip: String, id: String)] = []
+        
+        // Use Hue cloud discovery service
+        if let url = URL(string: "https://discovery.meethue.com/") {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                return bridges
+            }
+            
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                for bridge in json {
+                    if let ip = bridge["internalipaddress"] as? String,
+                       let id = bridge["id"] as? String {
+                        bridges.append((ip: ip, id: id))
+                    }
+                }
+            }
+        }
+        
+        return bridges
+    }
+    
+    private func getLightsFromBridge(_ bridge: (ip: String, id: String)) async throws -> [GoveeDevice] {
+        // Note: This requires the user to have already registered an API key with the bridge
+        // For now, we'll skip lights that require authentication
+        // In a full implementation, we'd need to handle the "press link button" flow
+        
+        // Try to get config to check if we have access
+        guard let url = URL(string: "http://\(bridge.ip)/api/config") else {
+            return []
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            return []
+        }
+        
+        // For now, return empty array since we need API key setup
+        // TODO: Implement API key registration flow with link button press
+        return []
+    }
+}
+
+struct HueBridgeControl: DeviceControlProtocol {
+    let bridgeIP: String
+    let username: String // Hue API username (created via link button)
+    
+    private func sendCommand(_ device: GoveeDevice, state: [String: Any]) async throws {
+        guard let lightID = device.id.components(separatedBy: "-").last else {
+            throw URLError(.badURL)
+        }
+        
+        guard let url = URL(string: "http://\(bridgeIP)/api/\(username)/lights/\(lightID)/state") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: state)
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+    }
+    
+    func setPower(device: GoveeDevice, on: Bool) async throws {
+        try await sendCommand(device, state: ["on": on])
+    }
+    
+    func setBrightness(device: GoveeDevice, value: Int) async throws {
+        // Hue uses 0-254 for brightness
+        let hueBrightness = Int(Double(value) / 100.0 * 254.0)
+        try await sendCommand(device, state: ["bri": hueBrightness])
+    }
+    
+    func setColor(device: GoveeDevice, color: DeviceColor) async throws {
+        // Convert RGB to Hue/Saturation
+        let r = Double(color.r) / 255.0
+        let g = Double(color.g) / 255.0
+        let b = Double(color.b) / 255.0
+        let maxC = max(r, g, b)
+        let minC = min(r, g, b)
+        let delta = maxC - minC
+        
+        var hue: Double = 0
+        if delta != 0 {
+            if maxC == r {
+                let h = (g - b) / delta
+                hue = 60 * (h < 0 ? h + 6 : h)  // Ensure positive result
+            } else if maxC == g {
+                hue = 60 * (((b - r) / delta) + 2)
+            } else {
+                hue = 60 * (((r - g) / delta) + 4)
+            }
+        }
+        // Normalize hue to 0-360 range
+        while hue < 0 { hue += 360 }
+        while hue >= 360 { hue -= 360 }
+        
+        let saturation = maxC == 0 ? 0 : (delta / maxC)
+        
+        // Hue uses 0-65535 for hue, 0-254 for saturation
+        let hueValue = Int(hue / 360.0 * 65535.0)
+        let satValue = Int(saturation * 254.0)
+        
+        try await sendCommand(device, state: ["hue": hueValue, "sat": satValue])
+    }
+    
+    func setColorTemperature(device: GoveeDevice, value: Int) async throws {
+        // Hue uses mireds (1,000,000 / kelvin)
+        let mireds = Int(1_000_000 / Double(value))
+        try await sendCommand(device, state: ["ct": mireds])
+    }
+}
+
+// MARK: - WLED Implementation
+
+struct WLEDDiscovery: DeviceDiscoveryProtocol {
+    func refreshDevices() async throws -> [GoveeDevice] {
+        // WLED devices are discovered via mDNS (_wled._tcp.)
+        // This is handled by LANDiscovery, but we need to identify them
+        // For now, return empty as LANDiscovery will pick them up
+        return []
+    }
+}
+
+struct WLEDControl: DeviceControlProtocol {
+    let deviceIP: String
+    
+    private func sendCommand(_ state: [String: Any]) async throws {
+        guard let url = URL(string: "http://\(deviceIP)/json/state") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: state)
+        request.timeoutInterval = 3
+        
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+    }
+    
+    func setPower(device: GoveeDevice, on: Bool) async throws {
+        try await sendCommand(["on": on])
+    }
+    
+    func setBrightness(device: GoveeDevice, value: Int) async throws {
+        // WLED uses 0-255 for brightness
+        let wledBrightness = Int(Double(value) / 100.0 * 255.0)
+        try await sendCommand(["bri": wledBrightness])
+    }
+    
+    func setColor(device: GoveeDevice, color: DeviceColor) async throws {
+        // WLED accepts RGB as array [r, g, b]
+        try await sendCommand(["seg": [["col": [[color.r, color.g, color.b]]]]])
+    }
+    
+    func setColorTemperature(device: GoveeDevice, value: Int) async throws {
+        // WLED doesn't directly support color temperature control
+        // Could be approximated with RGB conversion, but not implemented
+        throw SmartLightError.featureNotSupported("WLED color temperature control")
+    }
+}
+
+// MARK: - Protocol Errors
+
+enum SmartLightError: LocalizedError {
+    case featureNotSupported(String)
+    case notImplemented(String)
+    case authenticationRequired
+    
+    var errorDescription: String? {
+        switch self {
+        case .featureNotSupported(let detail):
+            return "Feature not supported: \(detail)"
+        case .notImplemented(let detail):
+            return "Not yet implemented: \(detail)"
+        case .authenticationRequired:
+            return "Authentication required. Please configure device credentials."
+        }
+    }
+}
+
+// MARK: - LIFX Implementation
+
+struct LIFXDiscovery: DeviceDiscoveryProtocol {
+    func refreshDevices() async throws -> [GoveeDevice] {
+        // LIFX devices are discovered via mDNS (_lifx._tcp.)
+        // This is handled by LANDiscovery
+        return []
+    }
+}
+
+struct LIFXControl: DeviceControlProtocol {
+    let deviceIP: String
+    
+    // LIFX LAN Protocol uses UDP packets on port 56700
+    // Full implementation requires binary protocol over UDP
+    
+    func setPower(device: GoveeDevice, on: Bool) async throws {
+        // Requires LIFX binary protocol implementation
+        // Packet structure: Header (36 bytes) + Payload (varies by message type)
+        throw SmartLightError.notImplemented("LIFX UDP binary protocol")
+    }
+    
+    func setBrightness(device: GoveeDevice, value: Int) async throws {
+        throw SmartLightError.notImplemented("LIFX UDP binary protocol")
+    }
+    
+    func setColor(device: GoveeDevice, color: DeviceColor) async throws {
+        throw SmartLightError.notImplemented("LIFX UDP binary protocol")
+    }
+    
+    func setColorTemperature(device: GoveeDevice, value: Int) async throws {
+        throw SmartLightError.notImplemented("LIFX UDP binary protocol")
+    }
+}
+
 // MARK: - Controller
 
 @MainActor
@@ -1194,6 +1486,7 @@ class GoveeController: ObservableObject {
     private let settings: SettingsStore
     private var pollingTask: Task<Void, Never>?
     private var dmxReceiver: DMXReceiver?
+    private var remoteControlHandler: RemoteControlHandler?
     
     #if canImport(HomeKit)
     @available(macOS 10.15, *)
@@ -1222,6 +1515,13 @@ class GoveeController: ObservableObject {
                 print("Failed to start DMX receiver: \(error)")
             }
         }
+        
+        // Initialize remote control handler for iOS app
+        self.remoteControlHandler = RemoteControlHandler(
+            controller: self,
+            deviceStore: deviceStore,
+            settingsStore: settings
+        )
         
         startPolling()
     }
@@ -1299,6 +1599,19 @@ class GoveeController: ObservableObject {
             }
         }
         
+        // Philips Hue Bridge Discovery
+        let hueDiscovery = HueBridgeDiscovery()
+        if let devices = try? await hueDiscovery.refreshDevices() {
+            for dev in devices {
+                if var existing = merged[dev.id] {
+                    existing.transports.insert(.hue)
+                    merged[dev.id] = existing
+                } else {
+                    merged[dev.id] = dev
+                }
+            }
+        }
+        
         let devices = Array(merged.values).sorted { $0.name < $1.name }
         deviceStore.replaceAll(devices)
         
@@ -1311,6 +1624,23 @@ class GoveeController: ObservableObject {
         // DMX has highest priority for devices with DMX mapping
         // DMX devices are controlled via incoming DMX signals, not direct control
         // So we skip them here and fall through to other transports
+        
+        // WLED devices
+        if device.transports.contains(.wled), let ip = device.ipAddress {
+            return WLEDControl(deviceIP: ip)
+        }
+        
+        // LIFX devices (LAN protocol)
+        // Note: LIFX requires UDP binary protocol - not yet fully implemented
+        if device.transports.contains(.lifx), let ip = device.ipAddress {
+            // return LIFXControl(deviceIP: ip)  // Uncomment when UDP protocol is implemented
+        }
+        
+        // Philips Hue Bridge devices
+        if device.transports.contains(.hue), let ip = device.ipAddress,
+           let username = settings.hueBridgeCredentials[ip] {
+            return HueBridgeControl(bridgeIP: ip, username: username)
+        }
         
         if settings.prefersLan, device.transports.contains(.lan), let ip = device.ipAddress {
             return LANControl(deviceIP: ip)
