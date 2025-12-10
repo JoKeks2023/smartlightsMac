@@ -21,6 +21,8 @@ struct ContentView: View {
     @State private var color: Color = .white
     @State private var colorTemperature: Double = 4000
     @State private var showColorPicker = false
+    @State private var showDMXConfig = false
+    @State private var dmxConfigDevice: GoveeDevice?
 
     var body: some View {
         NavigationSplitView {
@@ -41,6 +43,13 @@ struct ContentView: View {
         .sheet(isPresented: $showAddDevice) { addDeviceSheet }
         .sheet(isPresented: $showAddGroup) { addGroupSheet }
         .sheet(isPresented: $showColorPicker) { colorPickerSheet }
+        .sheet(isPresented: $showDMXConfig) {
+            if let device = dmxConfigDevice {
+                DMXConfigSheet(device: device)
+                    .environmentObject(deviceStore)
+                    .environmentObject(settings)
+            }
+        }
         .task { await controller.refresh() }
     }
 
@@ -93,6 +102,7 @@ struct ContentView: View {
     }
 
     private func transportBadge(_ d: GoveeDevice) -> String {
+        if d.transports.contains(.dmx) { return "DMX" }
         if d.transports.contains(.lan) { return "LAN" }
         if d.transports.contains(.homeKit) { return "Home" }
         if d.transports.contains(.cloud) { return "Cloud" }
@@ -284,7 +294,22 @@ struct ContentView: View {
 
     private func editGroup(_ group: DeviceGroup) { newGroupName = group.name; selectedMembers = Set(group.memberIDs); showAddGroup = true }
     private func deleteGroup(_ id: String) { deviceStore.deleteGroup(id) }
-    private func addToGroupContext(for device: GoveeDevice) -> some View { Menu("Add to group") { ForEach(deviceStore.groups) { group in Button(group.name) { addDevice(device.id, toGroup: group.id) } } } }
+    private func addToGroupContext(for device: GoveeDevice) -> some View {
+        Group {
+            Menu("Add to group") {
+                ForEach(deviceStore.groups) { group in
+                    Button(group.name) { addDevice(device.id, toGroup: group.id) }
+                }
+            }
+            if settings.dmxEnabled {
+                Divider()
+                Button("Configure DMX") {
+                    dmxConfigDevice = device
+                    showDMXConfig = true
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Device Discovery Sheet
@@ -561,9 +586,28 @@ struct SettingsView: View {
                 TextField("Base URL (https://homeassistant.local:8123)", text: $settings.haBaseURL)
                 SecureField("Long-Lived Token", text: $settings.haToken)
             }
+            Section(header: Text("DMX Control (ArtNet/sACN)")) {
+                Toggle("Enable DMX Control", isOn: $settings.dmxEnabled)
+                if settings.dmxEnabled {
+                    Picker("Protocol", selection: $settings.dmxProtocol) {
+                        Text("ArtNet").tag(DMXProtocolType.artnet)
+                        Text("sACN (E1.31)").tag(DMXProtocolType.sacn)
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    TextField("Broadcast Address", text: $settings.dmxBroadcastAddress)
+                        .textFieldStyle(.roundedBorder)
+                    
+                    Stepper("Output Rate: \(settings.dmxOutputRate) Hz", value: $settings.dmxOutputRate, in: 1...44)
+                    
+                    Text("Configure DMX channel mappings for each device in the device context menu.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(20)
-        .frame(minWidth: 500, minHeight: 340)
+        .frame(minWidth: 500, minHeight: settings.dmxEnabled ? 500 : 340)
     }
 }
 
@@ -605,6 +649,160 @@ struct WelcomeView: View {
         }
         .padding(30)
         .onAppear { apiKey = settings.goveeApiKey }
+    }
+}
+
+// MARK: - DMX Configuration Sheet
+
+struct DMXConfigSheet: View {
+    @EnvironmentObject private var deviceStore: DeviceStore
+    @EnvironmentObject private var settings: SettingsStore
+    @Environment(\.dismiss) private var dismiss
+    
+    let device: GoveeDevice
+    
+    @State private var universe: Int
+    @State private var startChannel: Int
+    @State private var channelMode: DMXChannelMapping.DMXChannelMode
+    
+    init(device: GoveeDevice) {
+        self.device = device
+        _universe = State(initialValue: device.dmxMapping?.universe ?? 0)
+        _startChannel = State(initialValue: device.dmxMapping?.startChannel ?? 1)
+        _channelMode = State(initialValue: device.dmxMapping?.channelMode ?? .rgb)
+    }
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("Configure DMX for \(device.name)")
+                .font(.title2)
+                .bold()
+            
+            Form {
+                Section(header: Text("DMX Settings")) {
+                    Stepper("Universe: \(universe)", value: $universe, in: 0...32767)
+                    
+                    Stepper("Start Channel: \(startChannel)", value: $startChannel, in: 1...512)
+                    
+                    Picker("Channel Mode", selection: $channelMode) {
+                        Text("Single Dimmer (1 ch)").tag(DMXChannelMapping.DMXChannelMode.single)
+                        Text("RGB (3 ch)").tag(DMXChannelMapping.DMXChannelMode.rgb)
+                        Text("RGBW (4 ch)").tag(DMXChannelMapping.DMXChannelMode.rgbw)
+                        Text("RGBA (4 ch)").tag(DMXChannelMapping.DMXChannelMode.rgba)
+                        Text("RGB + Dimmer (4 ch)").tag(DMXChannelMapping.DMXChannelMode.rgbDimmer)
+                        Text("Extended (6+ ch)").tag(DMXChannelMapping.DMXChannelMode.extended)
+                    }
+                    .pickerStyle(.menu)
+                }
+                
+                Section(header: Text("Channel Layout")) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(channelLayoutDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        HStack {
+                            Text("Channels used:")
+                                .font(.caption)
+                            Text("\(startChannel) - \(endChannel)")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                        }
+                        
+                        if endChannel > 512 {
+                            Text("⚠️ Warning: End channel exceeds DMX universe limit (512)")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+                
+                Section(header: Text("Protocol")) {
+                    HStack {
+                        Text("Current protocol:")
+                            .font(.caption)
+                        Text(settings.dmxProtocol.rawValue)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                    }
+                    Text("Change protocol in Settings")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(height: 400)
+            
+            HStack {
+                Button("Cancel") { dismiss() }
+                Spacer()
+                Button("Remove DMX") {
+                    removeDMXMapping()
+                    dismiss()
+                }
+                .foregroundColor(.red)
+                .disabled(device.dmxMapping == nil)
+                
+                Button("Save") {
+                    saveDMXMapping()
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 500)
+    }
+    
+    private var channelLayoutDescription: String {
+        switch channelMode {
+        case .single:
+            return "Ch\(startChannel): Dimmer/Brightness"
+        case .rgb:
+            return "Ch\(startChannel): Red, Ch\(startChannel+1): Green, Ch\(startChannel+2): Blue"
+        case .rgbw:
+            return "Ch\(startChannel): Red, Ch\(startChannel+1): Green, Ch\(startChannel+2): Blue, Ch\(startChannel+3): White"
+        case .rgba:
+            return "Ch\(startChannel): Red, Ch\(startChannel+1): Green, Ch\(startChannel+2): Blue, Ch\(startChannel+3): Amber"
+        case .rgbDimmer:
+            return "Ch\(startChannel): Dimmer, Ch\(startChannel+1): Red, Ch\(startChannel+2): Green, Ch\(startChannel+3): Blue"
+        case .extended:
+            return "Ch\(startChannel): Dimmer, Ch\(startChannel+1): Red, Ch\(startChannel+2): Green, Ch\(startChannel+3): Blue, Ch\(startChannel+4): White, Ch\(startChannel+5): Amber"
+        }
+    }
+    
+    private var endChannel: Int {
+        let channelCount: Int
+        switch channelMode {
+        case .single: channelCount = 1
+        case .rgb: channelCount = 3
+        case .rgbw, .rgba, .rgbDimmer: channelCount = 4
+        case .extended: channelCount = 6
+        }
+        return startChannel + channelCount - 1
+    }
+    
+    private func saveDMXMapping() {
+        let mapping = DMXChannelMapping(
+            universe: universe,
+            startChannel: startChannel,
+            channelMode: channelMode
+        )
+        
+        if let index = deviceStore.devices.firstIndex(where: { $0.id == device.id }) {
+            var updatedDevice = deviceStore.devices[index]
+            updatedDevice.dmxMapping = mapping
+            updatedDevice.transports.insert(.dmx)
+            deviceStore.devices[index] = updatedDevice
+        }
+    }
+    
+    private func removeDMXMapping() {
+        if let index = deviceStore.devices.firstIndex(where: { $0.id == device.id }) {
+            var updatedDevice = deviceStore.devices[index]
+            updatedDevice.dmxMapping = nil
+            updatedDevice.transports.remove(.dmx)
+            deviceStore.devices[index] = updatedDevice
+        }
     }
 }
 
