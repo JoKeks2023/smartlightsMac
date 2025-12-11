@@ -1,5 +1,11 @@
 # iOS Bridge Developer Guide
 
+> **📱 iOS Companion App Now Available!**  
+> The official iOS companion app is ready to use: [SmartLights iOS Companion](https://github.com/JoKeks2023/smartlightsMac-ios-companion)  
+> For ready-to-use code and complete implementation, visit the iOS companion repository above.
+
+---
+
 ## 🎯 Complete Guide to Building the iOS Companion App
 
 This guide provides everything you need to build a fully-functional iOS companion app that can **control everything** in the macOS app, including devices, groups, and settings.

@@ -1,5 +1,11 @@
 # iOS Companion App Integration Guide
 
+> **📱 iOS Companion App Now Available!**  
+> The official iOS companion app is ready to use: [SmartLights iOS Companion](https://github.com/JoKeks2023/smartlightsMac-ios-companion)  
+> This guide explains how the integration works. For using the ready-made iOS app, visit the repository above.
+
+---
+
 ## 🌉 Multi-Transport Bridge Architecture
 
 The macOS app now includes a comprehensive multi-transport bridge infrastructure that enables seamless data synchronization with an iOS companion app using **THREE** synchronization methods:
