@@ -8,15 +8,17 @@ The app supports controlling smart lights from **multiple manufacturers**:
 
 ### ✅ Directly Supported
 - **Govee** - Native Cloud API and LAN protocol
-- **Philips Hue** - Via HomeKit or Home Assistant
+- **Philips Hue** - Native Hue Bridge API, HomeKit, or Home Assistant
 - **LIFX** - Via HomeKit or Home Assistant
 - **Nanoleaf** - Via HomeKit
 - **TP-Link Kasa/Tapo** - Via Home Assistant
 - **Yeelight** - Via Home Assistant
-- **WLED** - Via Home Assistant
+- **WLED** - Native REST API or Home Assistant
 - **100+ Other Brands** - Via Home Assistant
 
 See [MANUFACTURER_INTEGRATION.md](MANUFACTURER_INTEGRATION.md) for complete integration guide.
+
+Native Hue Bridge control and direct WLED REST control work without HomeKit or Home Assistant when configured, while HomeKit/HA remain available for broader multi-brand support.
 
 ### ✅ 1. LAN Auto-Discovery
 **Implementation:** `GoveeModels.swift` - `LANDiscovery` class
