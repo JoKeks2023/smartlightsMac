@@ -1028,261 +1028,108 @@ struct SettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var controller: GoveeController
     @EnvironmentObject private var deviceStore: DeviceStore
-    @Environment(\.colorScheme) private var colorScheme
     @State private var isScanningLAN = false
     @State private var lanStatus = "Use discovery to find nearby LAN-enabled lights."
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                settingsHero
-                metricsRow
-                connectivityCard
-                discoveryCard
-                automationCard
-            }
-            .padding(24)
-        }
-        .background(
-            LinearGradient(
-                colors: colorScheme == .dark
-                    ? [Color(red: 0.07, green: 0.08, blue: 0.11), Color(red: 0.08, green: 0.12, blue: 0.18)]
-                    : [Color(red: 0.96, green: 0.97, blue: 0.99), Color(red: 0.91, green: 0.95, blue: 0.98)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .frame(minWidth: 720, minHeight: 640)
-    }
-
-    private var settingsHero: some View {
-        HStack(alignment: .top, spacing: 18) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(red: 0.08, green: 0.35, blue: 0.40), Color(red: 0.07, green: 0.52, blue: 0.60)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 72, height: 72)
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Control Center")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text("Configure cloud access, LAN discovery, HomeKit support, and DMX input without digging through a plain form.")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack(spacing: 8) {
-                    SettingsPill(text: settings.goveeApiKey.isEmpty ? "Cloud Not Connected" : "Cloud Ready", tint: settings.goveeApiKey.isEmpty ? .gray : .blue)
-                    SettingsPill(text: settings.prefersLan ? "LAN Preferred" : "LAN Optional", tint: .green)
-                    SettingsPill(text: settings.homeKitEnabled ? "HomeKit On" : "HomeKit Off", tint: .orange)
-                }
-            }
-        }
-        .padding(22)
-        .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke((colorScheme == .dark ? Color.white : Color.black).opacity(0.12), lineWidth: 1)
-        )
-    }
-
-    private var metricsRow: some View {
-        HStack(spacing: 14) {
-            SettingsMetricCard(title: "Devices", value: "\(deviceStore.devices.count)", accent: .blue)
-            SettingsMetricCard(title: "Groups", value: "\(deviceStore.groups.count)", accent: .pink)
-            SettingsMetricCard(title: "LAN Targets", value: "\(deviceStore.devices.filter { $0.transports.contains(.lan) || $0.transports.contains(.wled) || $0.transports.contains(.lifx) }.count)", accent: .green)
-        }
-    }
-
-    private var connectivityCard: some View {
-        SettingsCard(title: "Connectivity", subtitle: "Credentials and remote integrations") {
-            VStack(alignment: .leading, spacing: 14) {
-                SettingsField(label: "Govee Cloud API Key") {
-                    TextField("Paste your developer API key", text: $settings.goveeApiKey)
-                        .textFieldStyle(.roundedBorder)
+        Form {
+            Section("General") {
+                LabeledContent("Devices") {
+                    Text("\(deviceStore.devices.count)")
+                        .foregroundStyle(.secondary)
                 }
 
-                SettingsField(label: "Home Assistant URL") {
-                    TextField("https://homeassistant.local:8123", text: $settings.haBaseURL)
-                        .textFieldStyle(.roundedBorder)
+                LabeledContent("Groups") {
+                    Text("\(deviceStore.groups.count)")
+                        .foregroundStyle(.secondary)
                 }
 
-                SettingsField(label: "Home Assistant Token") {
-                    SecureField("Long-lived access token", text: $settings.haToken)
-                        .textFieldStyle(.roundedBorder)
+                LabeledContent("LAN Targets") {
+                    Text("\(lanDeviceCount)")
+                        .foregroundStyle(.secondary)
                 }
             }
-        }
-    }
 
-    private var discoveryCard: some View {
-        SettingsCard(title: "Discovery", subtitle: "Local network and HomeKit behavior") {
-            VStack(alignment: .leading, spacing: 16) {
+            Section("Connectivity") {
+                TextField("Paste your developer API key", text: $settings.goveeApiKey)
+                    .textFieldStyle(.roundedBorder)
+                    .textContentType(.password)
+
+                TextField("https://homeassistant.local:8123", text: $settings.haBaseURL)
+                    .textFieldStyle(.roundedBorder)
+
+                SecureField("Long-lived access token", text: $settings.haToken)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            Section("Discovery") {
                 Toggle("Prefer LAN control when available", isOn: $settings.prefersLan)
-                    .toggleStyle(.switch)
+                Toggle("Load HomeKit lights", isOn: $settings.homeKitEnabled)
 
-                HStack(alignment: .center, spacing: 12) {
-                    Button {
-                        isScanningLAN = true
-                        lanStatus = "Scanning local services..."
-                        Task {
-                            await controller.refreshLANOnly()
-                            let count = deviceStore.devices.filter { $0.transports.contains(.lan) || $0.transports.contains(.wled) || $0.transports.contains(.lifx) }.count
-                            lanStatus = count == 0 ? "No LAN devices found. Manual IP entry is still available." : "Found \(count) LAN device\(count == 1 ? "" : "s")."
-                            isScanningLAN = false
-                        }
-                    } label: {
-                        HStack(spacing: 8) {
-                            if isScanningLAN {
-                                ProgressView()
-                                    .controlSize(.small)
-                            } else {
-                                Image(systemName: "dot.radiowaves.left.and.right")
-                            }
-                            Text(isScanningLAN ? "Scanning LAN..." : "Run LAN Discovery")
-                        }
-                        .frame(maxWidth: .infinity)
+                HStack(alignment: .center, spacing: 10) {
+                    Button(isScanningLAN ? "Scanning LAN..." : "Run LAN Discovery") {
+                        runLANDiscovery()
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.green)
                     .disabled(isScanningLAN)
 
-                    Toggle("Load HomeKit lights", isOn: $settings.homeKitEnabled)
-                        .toggleStyle(.switch)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if isScanningLAN {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
                 }
 
                 Text(lanStatus)
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 Text("HomeKit includes regular HomeKit lights as well as Matter accessories. If discovery misses a LAN device, add it manually from the main window.")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        }
-    }
 
-    private var automationCard: some View {
-        SettingsCard(title: "Automation", subtitle: "DMX receiver and protocol settings") {
-            VStack(alignment: .leading, spacing: 16) {
+            Section("DMX") {
                 Toggle("Enable DMX Receiver", isOn: $settings.dmxEnabled)
-                    .toggleStyle(.switch)
 
                 if settings.dmxEnabled {
                     Picker("Protocol", selection: $settings.dmxProtocol) {
                         Text("ArtNet").tag(DMXProtocolType.artnet)
                         Text("sACN (E1.31)").tag(DMXProtocolType.sacn)
                     }
-                    .pickerStyle(.segmented)
 
-                    HStack(spacing: 12) {
-                        SettingsPill(text: "Port \(settings.dmxProtocol == .artnet ? "6454" : "5568")", tint: .blue)
-                        SettingsPill(text: "Map devices from the context menu", tint: .purple)
+                    LabeledContent("Port") {
+                        Text(settings.dmxProtocol == .artnet ? "6454" : "5568")
+                            .foregroundStyle(.secondary)
                     }
 
                     Text("Incoming DMX packets will drive any device with a DMX mapping. Use the device context menu in the sidebar to assign addresses and profiles.")
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
-    }
-}
-
-private struct SettingsCard<Content: View>: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let title: String
-    let subtitle: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.title3.weight(.semibold))
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            content
-        }
+        .formStyle(.grouped)
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke((colorScheme == .dark ? Color.white : Color.black).opacity(0.10), lineWidth: 1)
-        )
+        .frame(minWidth: 620, minHeight: 520)
     }
-}
 
-private struct SettingsField<Content: View>: View {
-    let label: String
-    @ViewBuilder let content: Content
+    private var lanDeviceCount: Int {
+        deviceStore.devices.filter {
+            $0.transports.contains(.lan) || $0.transports.contains(.wled) || $0.transports.contains(.lifx)
+        }.count
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            content
+    private func runLANDiscovery() {
+        isScanningLAN = true
+        lanStatus = "Scanning local network..."
+        Task {
+            await controller.refreshLANOnly()
+            let count = lanDeviceCount
+            lanStatus = count == 0 ? "No LAN devices found. Manual IP entry is still available." : "Found \(count) LAN device\(count == 1 ? "" : "s")."
+            isScanningLAN = false
         }
-    }
-}
-
-private struct SettingsMetricCard: View {
-    @Environment(\.colorScheme) private var colorScheme
-    let title: String
-    let value: String
-    let accent: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(accent)
-                .frame(width: 28, height: 6)
-            Text(value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.thinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke((colorScheme == .dark ? Color.white : Color.black).opacity(0.10), lineWidth: 1)
-        )
-    }
-}
-
-private struct SettingsPill: View {
-    let text: String
-    let tint: Color
-
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(tint.opacity(0.14))
-            .foregroundStyle(tint)
-            .clipShape(Capsule())
     }
 }
 
