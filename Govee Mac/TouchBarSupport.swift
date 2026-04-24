@@ -4,9 +4,10 @@ import AppKit
 struct TouchBarBridge: NSViewRepresentable {
     @ObservedObject var deviceStore: DeviceStore
     @ObservedObject var controller: GoveeController
+    @ObservedObject var settings: SettingsStore
 
     func makeCoordinator() -> TouchBarCoordinator {
-        TouchBarCoordinator(deviceStore: deviceStore, controller: controller)
+        TouchBarCoordinator(deviceStore: deviceStore, controller: controller, settings: settings)
     }
 
     func makeNSView(context: Context) -> TouchBarHostingView {
@@ -54,12 +55,15 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
 
     private let deviceStore: DeviceStore
     private let controller: GoveeController
+    private let settings: SettingsStore
 
     private var brightnessTask: Task<Void, Never>?
     private var colorTemperatureTask: Task<Void, Never>?
+    private var colorTask: Task<Void, Never>?
     private weak var deviceScrubber: NSScrubber?
-    private weak var colorPresetScrubber: NSScrubber?
     private weak var colorPopoverItem: NSPopoverTouchBarItem?
+    private weak var savedColorStripView: TouchBarSavedColorStripView?
+    private var currentTouchBarColor = DeviceColor(r: 255, g: 140, b: 82)
 
     private let accentColor = NSColor.controlAccentColor
 
@@ -106,15 +110,18 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
         static let colorTempPopover = NSTouchBarItem.Identifier("com.govee.mac.touchbar.colorTempPopover")
         static let colorTempSlider = NSTouchBarItem.Identifier("com.govee.mac.touchbar.colorTempSlider")
         static let colorPopover = NSTouchBarItem.Identifier("com.govee.mac.touchbar.colorPopover")
-        static let colorPresetPicker = NSTouchBarItem.Identifier("com.govee.mac.touchbar.colorPresetPicker")
+        static let colorSpectrum = NSTouchBarItem.Identifier("com.govee.mac.touchbar.colorSpectrum")
+        static let colorSave = NSTouchBarItem.Identifier("com.govee.mac.touchbar.colorSave")
+        static let savedColors = NSTouchBarItem.Identifier("com.govee.mac.touchbar.savedColors")
     }
 
     private var mode: TouchBarMode = .devices
     private var lastStructuralSignature = ""
 
-    init(deviceStore: DeviceStore, controller: GoveeController) {
+    init(deviceStore: DeviceStore, controller: GoveeController, settings: SettingsStore) {
         self.deviceStore = deviceStore
         self.controller = controller
+        self.settings = settings
         super.init()
         _ = syncState()
     }
@@ -189,8 +196,12 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
             return makeColorTemperatureSliderItem()
         case Identifier.colorPopover:
             return makeColorPopoverItem()
-        case Identifier.colorPresetPicker:
-            return makeColorPresetPickerItem()
+        case Identifier.colorSpectrum:
+            return makeColorSpectrumItem()
+        case Identifier.colorSave:
+            return makeSaveColorItem()
+        case Identifier.savedColors:
+            return makeSavedColorsItem()
         default:
             return nil
         }
@@ -373,36 +384,62 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
 
         let popoverBar = NSTouchBar()
         popoverBar.delegate = self
-        popoverBar.defaultItemIdentifiers = [Identifier.colorPresetPicker]
-        popoverBar.principalItemIdentifier = Identifier.colorPresetPicker
+        popoverBar.defaultItemIdentifiers = [Identifier.colorSpectrum, Identifier.colorSave, Identifier.savedColors]
+        popoverBar.principalItemIdentifier = Identifier.colorSpectrum
 
         item.popoverTouchBar = popoverBar
         colorPopoverItem = item
         return item
     }
 
-    private func makeColorPresetPickerItem() -> NSTouchBarItem {
-        let item = NSCustomTouchBarItem(identifier: Identifier.colorPresetPicker)
-        let scrubber = NSScrubber()
-        scrubber.mode = .fixed
-        scrubber.selectionBackgroundStyle = .roundedBackground
-        scrubber.showsAdditionalContentIndicators = true
-        scrubber.delegate = self
-        scrubber.dataSource = self
-        scrubber.register(NSScrubberTextItemView.self, forItemIdentifier: NSUserInterfaceItemIdentifier("ColorPresetItem"))
-
-        let layout = NSScrubberFlowLayout()
-        layout.itemSpacing = 16
-        scrubber.scrubberLayout = layout
-        scrubber.translatesAutoresizingMaskIntoConstraints = false
+    private func makeColorSpectrumItem() -> NSTouchBarItem {
+        let item = NSCustomTouchBarItem(identifier: Identifier.colorSpectrum)
+        let initialColor = currentDevice()?.color ?? DeviceColor(r: 255, g: 140, b: 82)
+        currentTouchBarColor = initialColor
+        let hsv = HSVColor.from(rgb: initialColor)
+        let view = TouchBarColorSpectrumView(initialHue: hsv.hue)
+        view.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            scrubber.widthAnchor.constraint(equalToConstant: 420)
+            view.widthAnchor.constraint(equalToConstant: 420),
+            view.heightAnchor.constraint(equalToConstant: 30)
         ])
-
-        colorPresetScrubber = scrubber
-        item.view = scrubber
-        item.customizationLabel = "Color Presets"
+        view.onHueChanged = { [weak self] hue in
+            self?.handleColorChange(hue: hue)
+        }
+        item.view = view
+        item.customizationLabel = "Color"
         item.visibilityPriority = .high
+        return item
+    }
+
+    private func makeSaveColorItem() -> NSTouchBarItem {
+        let item = NSButtonTouchBarItem(
+            identifier: Identifier.colorSave,
+            image: NSImage(systemSymbolName: "plus.circle.fill", accessibilityDescription: "Save Color") ?? NSImage(),
+            target: self,
+            action: #selector(saveCurrentTouchBarColor)
+        )
+        item.customizationLabel = "Save Color"
+        item.bezelColor = .controlColor
+        item.visibilityPriority = .high
+        return item
+    }
+
+    private func makeSavedColorsItem() -> NSTouchBarItem {
+        let item = NSCustomTouchBarItem(identifier: Identifier.savedColors)
+        let view = TouchBarSavedColorStripView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            view.widthAnchor.constraint(equalToConstant: 220),
+            view.heightAnchor.constraint(equalToConstant: 30)
+        ])
+        view.configure(presets: settings.savedColorPresets)
+        view.onSelect = { [weak self] preset in
+            self?.applySavedColorPreset(preset)
+        }
+        savedColorStripView = view
+        item.view = view
+        item.customizationLabel = "Saved Colors"
         return item
     }
 
@@ -453,12 +490,29 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
         invalidateTouchBar()
     }
 
-    private func selectColorPreset(at index: Int) {
-        guard let preset = DevicePreset(rawValue: index) else { return }
+    private func handleColorChange(hue: Double) {
+        let rgb = HSVColor(hue: hue, saturation: 0.92, brightness: 1.0).rgb
+        currentTouchBarColor = rgb
+        updateSelectedDevice(color: rgb)
+        colorTask?.cancel()
+        colorTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 45_000_000)
+            guard !Task.isCancelled else { return }
+            await controller.setColor(rgb)
+        }
+    }
+
+    @objc private func saveCurrentTouchBarColor() {
+        settings.saveColorPreset(currentTouchBarColor)
+        savedColorStripView?.configure(presets: settings.savedColorPresets)
+    }
+
+    private func applySavedColorPreset(_ preset: SavedColorPreset) {
+        currentTouchBarColor = preset.color
         updateSelectedDevice(color: preset.color)
-        Task { @MainActor in
+        colorTask?.cancel()
+        colorTask = Task { @MainActor in
             await controller.setColor(preset.color)
-            colorPopoverItem?.dismissPopover(nil)
         }
     }
 
@@ -498,23 +552,10 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
     }
 
     func numberOfItems(for scrubber: NSScrubber) -> Int {
-        if scrubber === colorPresetScrubber {
-            return DevicePreset.allCases.count
-        }
         return deviceStore.devices.count
     }
 
     func scrubber(_ scrubber: NSScrubber, viewForItemAt index: Int) -> NSScrubberItemView {
-        if scrubber === colorPresetScrubber {
-            let identifier = NSUserInterfaceItemIdentifier("ColorPresetItem")
-            let itemView = scrubber.makeItem(withIdentifier: identifier, owner: self) as? NSScrubberTextItemView ?? NSScrubberTextItemView()
-            let preset = DevicePreset.allCases[index]
-            itemView.title = preset.title
-            itemView.textField.alignment = .center
-            itemView.textField.font = .systemFont(ofSize: 0, weight: .medium)
-            return itemView
-        }
-
         let identifier = NSUserInterfaceItemIdentifier("DeviceTextItem")
         let itemView = scrubber.makeItem(withIdentifier: identifier, owner: self) as? NSScrubberTextItemView ?? NSScrubberTextItemView()
         let device = deviceStore.devices[index]
@@ -526,9 +567,7 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
     }
 
     func scrubber(_ scrubber: NSScrubber, didSelectItemAt selectedIndex: Int) {
-        if scrubber === colorPresetScrubber {
-            selectColorPreset(at: selectedIndex)
-        } else if scrubber === deviceScrubber {
+        if scrubber === deviceScrubber {
             selectDevice(at: selectedIndex)
         }
     }
@@ -718,5 +757,165 @@ final class TouchBarValueSliderView: NSView {
         if notify {
             onValueChanged?(value)
         }
+    }
+}
+
+final class TouchBarColorSpectrumView: NSView {
+    var onHueChanged: ((Double) -> Void)?
+
+    private let trackLayer = CALayer()
+    private let knobLayer = CALayer()
+    private let gradientLayer = CAGradientLayer()
+    private var hue: Double
+
+    init(initialHue: Double) {
+        self.hue = initialHue
+        super.init(frame: .zero)
+
+        wantsLayer = true
+        allowedTouchTypes = [.direct]
+        layer?.cornerRadius = 15
+        layer?.masksToBounds = false
+
+        gradientLayer.colors = stride(from: 0.0, through: 1.0, by: 0.125).map {
+            let rgb = HSVColor(hue: $0, saturation: 1, brightness: 1).rgb
+            return NSColor(
+                red: CGFloat(rgb.r) / 255.0,
+                green: CGFloat(rgb.g) / 255.0,
+                blue: CGFloat(rgb.b) / 255.0,
+                alpha: 1
+            ).cgColor
+        }
+        gradientLayer.startPoint = CGPoint(x: 0, y: 0.5)
+        gradientLayer.endPoint = CGPoint(x: 1, y: 0.5)
+        gradientLayer.cornerRadius = 12
+
+        trackLayer.backgroundColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        trackLayer.cornerRadius = 12
+        knobLayer.backgroundColor = NSColor.white.cgColor
+        knobLayer.cornerRadius = 10
+        knobLayer.shadowColor = NSColor.black.withAlphaComponent(0.24).cgColor
+        knobLayer.shadowOpacity = 1
+        knobLayer.shadowRadius = 3
+        knobLayer.shadowOffset = CGSize(width: 0, height: 1)
+
+        layer?.addSublayer(trackLayer)
+        layer?.addSublayer(gradientLayer)
+        layer?.addSublayer(knobLayer)
+
+        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleClick(_:)))
+        let panGesture = NSPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        clickGesture.allowedTouchTypes = [.direct]
+        panGesture.allowedTouchTypes = [.direct]
+        panGesture.buttonMask = 0
+        addGestureRecognizer(clickGesture)
+        addGestureRecognizer(panGesture)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 420, height: 30)
+    }
+
+    override func layout() {
+        super.layout()
+        let frame = CGRect(x: 6, y: bounds.midY - 12, width: bounds.width - 12, height: 24)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        trackLayer.frame = frame
+        gradientLayer.frame = frame
+        knobLayer.frame = knobFrame(in: frame)
+        CATransaction.commit()
+    }
+
+    private func knobFrame(in track: CGRect) -> CGRect {
+        let x = track.minX + CGFloat(hue) * track.width - 10
+        return CGRect(x: x, y: bounds.midY - 10, width: 20, height: 20)
+    }
+
+    @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {
+        updateHue(at: gesture.location(in: self))
+    }
+
+    @objc private func handlePan(_ gesture: NSPanGestureRecognizer) {
+        updateHue(at: gesture.location(in: self))
+    }
+
+    private func updateHue(at location: CGPoint) {
+        let track = trackLayer.frame
+        guard track.width > 0 else { return }
+        let clampedX = min(max(location.x, track.minX), track.maxX)
+        hue = Double((clampedX - track.minX) / track.width)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        knobLayer.frame = knobFrame(in: track)
+        CATransaction.commit()
+        onHueChanged?(hue)
+    }
+}
+
+final class TouchBarSavedColorStripView: NSView {
+    var onSelect: ((SavedColorPreset) -> Void)?
+
+    private var presets: [SavedColorPreset] = []
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 220, height: 30)
+    }
+
+    func configure(presets: [SavedColorPreset]) {
+        self.presets = Array(presets.prefix(6))
+        subviews.forEach { $0.removeFromSuperview() }
+
+        let stack = NSStackView()
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        for preset in self.presets {
+            let button = NSButton(title: "", target: self, action: #selector(selectPreset(_:)))
+            button.identifier = NSUserInterfaceItemIdentifier(preset.id)
+            button.isBordered = false
+            button.wantsLayer = true
+            button.layer?.cornerRadius = 10
+            button.layer?.backgroundColor = NSColor(
+                red: CGFloat(preset.color.r) / 255.0,
+                green: CGFloat(preset.color.g) / 255.0,
+                blue: CGFloat(preset.color.b) / 255.0,
+                alpha: 1
+            ).cgColor
+            button.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: 20),
+                button.heightAnchor.constraint(equalToConstant: 20)
+            ])
+            stack.addArrangedSubview(button)
+        }
+
+        addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            stack.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    @objc private func selectPreset(_ sender: NSButton) {
+        guard let id = sender.identifier?.rawValue,
+              let preset = presets.first(where: { $0.id == id }) else { return }
+        onSelect?(preset)
     }
 }

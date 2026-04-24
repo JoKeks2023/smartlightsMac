@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var showDMXConfig = false
     @State private var dmxConfigDevice: GoveeDevice?
     @State private var isSyncingControlState = false
+    @State private var colorCommandTask: Task<Void, Never>?
 
     var body: some View {
         NavigationSplitView {
@@ -65,7 +66,7 @@ struct ContentView: View {
                     .environmentObject(settings)
             }
         }
-        .background(TouchBarBridge(deviceStore: deviceStore, controller: controller))
+        .background(TouchBarBridge(deviceStore: deviceStore, controller: controller, settings: settings))
         .onAppear(perform: syncControlStateFromSelection)
         .onChange(of: controlSyncSignature) { _ in
             syncControlStateFromSelection()
@@ -211,21 +212,22 @@ struct ContentView: View {
     }
 
     private var colorPickerSheet: some View {
-        VStack(spacing: 16) {
-            Text("Color Picker").font(.title2).bold()
-            ColorPicker("Color", selection: $color, supportsOpacity: false)
-                .onChange(of: color) { newColor in
-                    let rgb = rgbComponents(newColor)
-                    Task {
-                        if let gid = deviceStore.selectedGroupID { await controller.setGroupColor(groupID: gid, color: rgb) }
-                        else { await controller.setColor(rgb) }
-                    }
-                }
-            Button("Done") { showColorPicker = false }
-                .keyboardShortcut(.defaultAction)
-        }
-        .padding(20)
-        .frame(minWidth: 360)
+        CustomColorPickerSheet(
+            initialColor: currentPickerDeviceColor,
+            savedPresets: settings.savedColorPresets,
+            onColorChange: { rgb in
+                color = Color(
+                    red: Double(rgb.r) / 255.0,
+                    green: Double(rgb.g) / 255.0,
+                    blue: Double(rgb.b) / 255.0
+                )
+                queueColorCommand(rgb)
+            },
+            onSavePreset: { rgb in
+                settings.saveColorPreset(rgb)
+            },
+            onDone: { showColorPicker = false }
+        )
     }
 
     private func rgbComponents(_ c: Color) -> DeviceColor {
@@ -284,6 +286,28 @@ struct ContentView: View {
         }
         DispatchQueue.main.async {
             isSyncingControlState = false
+        }
+    }
+
+    private var currentPickerDeviceColor: DeviceColor {
+        if let groupID = deviceStore.selectedGroupID,
+           let firstColorDevice = groupMembers(groupID).first(where: { $0.color != nil }),
+           let groupColor = firstColorDevice.color {
+            return groupColor
+        }
+        return currentDevice?.color ?? DeviceColor(r: 255, g: 140, b: 82)
+    }
+
+    private func queueColorCommand(_ rgb: DeviceColor) {
+        colorCommandTask?.cancel()
+        colorCommandTask = Task {
+            try? await Task.sleep(nanoseconds: 45_000_000)
+            guard !Task.isCancelled else { return }
+            if let gid = deviceStore.selectedGroupID {
+                await controller.setGroupColor(groupID: gid, color: rgb)
+            } else {
+                await controller.setColor(rgb)
+            }
         }
     }
     
@@ -373,6 +397,369 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+struct CustomColorPickerSheet: View {
+    let initialColor: DeviceColor
+    let savedPresets: [SavedColorPreset]
+    let onColorChange: (DeviceColor) -> Void
+    let onSavePreset: (DeviceColor) -> Void
+    let onDone: () -> Void
+
+    @State private var hue: Double
+    @State private var saturation: Double
+    @State private var brightness: Double
+
+    init(
+        initialColor: DeviceColor,
+        savedPresets: [SavedColorPreset],
+        onColorChange: @escaping (DeviceColor) -> Void,
+        onSavePreset: @escaping (DeviceColor) -> Void,
+        onDone: @escaping () -> Void
+    ) {
+        self.initialColor = initialColor
+        self.savedPresets = savedPresets
+        self.onColorChange = onColorChange
+        self.onSavePreset = onSavePreset
+        self.onDone = onDone
+        let hsv = HSVColor.from(rgb: initialColor)
+        _hue = State(initialValue: hsv.hue)
+        _saturation = State(initialValue: hsv.saturation)
+        _brightness = State(initialValue: hsv.brightness)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Color Studio")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+
+            HStack(alignment: .top, spacing: 18) {
+                VStack(spacing: 14) {
+                    SaturationBrightnessField(
+                        hue: hue,
+                        saturation: $saturation,
+                        brightness: $brightness
+                    )
+                    .frame(width: 280, height: 220)
+
+                    HueSpectrumSlider(hue: $hue)
+                        .frame(width: 280, height: 26)
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(previewColor)
+                        .frame(width: 120, height: 120)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24)
+                                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        )
+
+                    Text(hexString)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+
+                    Button {
+                        onSavePreset(currentRGB)
+                    } label: {
+                        Label("Save Color", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+
+                    ColorSwatchRow { swatch in
+                        let hsv = HSVColor.from(rgb: swatch)
+                        hue = hsv.hue
+                        saturation = hsv.saturation
+                        brightness = hsv.brightness
+                    }
+                }
+            }
+
+            if !savedPresets.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Saved Colors")
+                        .font(.headline)
+                    SavedColorPresetRow(presets: savedPresets) { preset in
+                        let hsv = HSVColor.from(rgb: preset.color)
+                        hue = hsv.hue
+                        saturation = hsv.saturation
+                        brightness = hsv.brightness
+                    }
+                }
+            }
+
+            HStack {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Saturation \(Int(saturation * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Brightness \(Int(brightness * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("Done") { onDone() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(minWidth: 470)
+        .background(
+            LinearGradient(
+                colors: [Color.black.opacity(0.78), Color(red: 0.12, green: 0.13, blue: 0.16)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .onAppear(perform: emitColor)
+        .onChange(of: hue) { _ in emitColor() }
+        .onChange(of: saturation) { _ in emitColor() }
+        .onChange(of: brightness) { _ in emitColor() }
+    }
+
+    private var previewColor: Color {
+        let rgb = currentRGB
+        return Color(red: Double(rgb.r) / 255.0, green: Double(rgb.g) / 255.0, blue: Double(rgb.b) / 255.0)
+    }
+
+    private var currentRGB: DeviceColor {
+        HSVColor(hue: hue, saturation: saturation, brightness: brightness).rgb
+    }
+
+    private var hexString: String {
+        let rgb = currentRGB
+        return String(format: "#%02X%02X%02X", rgb.r, rgb.g, rgb.b)
+    }
+
+    private func emitColor() {
+        onColorChange(currentRGB)
+    }
+}
+
+struct SaturationBrightnessField: View {
+    let hue: Double
+    @Binding var saturation: Double
+    @Binding var brightness: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(baseHueColor)
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(
+                        LinearGradient(
+                            colors: [.white, .white.opacity(0)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(
+                        LinearGradient(
+                            colors: [.black.opacity(0), .black],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                Circle()
+                    .strokeBorder(.white, lineWidth: 2)
+                    .background(Circle().fill(Color.clear))
+                    .frame(width: 22, height: 22)
+                    .position(
+                        x: saturation * proxy.size.width,
+                        y: (1 - brightness) * proxy.size.height
+                    )
+                    .shadow(radius: 3)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        saturation = min(max(0, value.location.x / proxy.size.width), 1)
+                        brightness = 1 - min(max(0, value.location.y / proxy.size.height), 1)
+                    }
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+    }
+
+    private var baseHueColor: Color {
+        let rgb = HSVColor(hue: hue, saturation: 1, brightness: 1).rgb
+        return Color(red: Double(rgb.r) / 255.0, green: Double(rgb.g) / 255.0, blue: Double(rgb.b) / 255.0)
+    }
+}
+
+struct HueSpectrumSlider: View {
+    @Binding var hue: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 13)
+                    .fill(
+                        LinearGradient(
+                            stops: stride(from: 0.0, through: 1.0, by: 0.125).map { location in
+                                let rgb = HSVColor(hue: location, saturation: 1, brightness: 1).rgb
+                                return .init(
+                                    color: Color(red: Double(rgb.r) / 255.0, green: Double(rgb.g) / 255.0, blue: Double(rgb.b) / 255.0),
+                                    location: location
+                                )
+                            },
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                Circle()
+                    .fill(.white)
+                    .frame(width: 18, height: 18)
+                    .overlay(Circle().stroke(.black.opacity(0.2), lineWidth: 1))
+                    .offset(x: max(0, min(proxy.size.width - 18, hue * proxy.size.width - 9)))
+            }
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        hue = min(max(0, value.location.x / proxy.size.width), 1)
+                    }
+            )
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 13)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        )
+    }
+}
+
+struct ColorSwatchRow: View {
+    let onSelect: (DeviceColor) -> Void
+
+    private let swatches: [DeviceColor] = [
+        DeviceColor(r: 255, g: 95, b: 86),
+        DeviceColor(r: 255, g: 178, b: 43),
+        DeviceColor(r: 255, g: 230, b: 109),
+        DeviceColor(r: 57, g: 214, b: 155),
+        DeviceColor(r: 72, g: 164, b: 255),
+        DeviceColor(r: 165, g: 95, b: 255),
+        DeviceColor(r: 255, g: 89, b: 183),
+        DeviceColor(r: 255, g: 255, b: 255)
+    ]
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 8), count: 4), spacing: 8) {
+            ForEach(Array(swatches.enumerated()), id: \.offset) { _, swatch in
+                Button {
+                    onSelect(swatch)
+                } label: {
+                    Circle()
+                        .fill(Color(
+                            red: Double(swatch.r) / 255.0,
+                            green: Double(swatch.g) / 255.0,
+                            blue: Double(swatch.b) / 255.0
+                        ))
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+struct SavedColorPresetRow: View {
+    let presets: [SavedColorPreset]
+    let onSelect: (SavedColorPreset) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(presets) { preset in
+                    Button {
+                        onSelect(preset)
+                    } label: {
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(
+                                Color(
+                                    red: Double(preset.color.r) / 255.0,
+                                    green: Double(preset.color.g) / 255.0,
+                                    blue: Double(preset.color.b) / 255.0
+                                )
+                            )
+                            .frame(width: 46, height: 46)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(Color.white.opacity(0.15), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+struct HSVColor {
+    var hue: Double
+    var saturation: Double
+    var brightness: Double
+
+    var rgb: DeviceColor {
+        let h = max(0, min(1, hue))
+        let s = max(0, min(1, saturation))
+        let v = max(0, min(1, brightness))
+
+        let i = Int(h * 6)
+        let f = h * 6 - Double(i)
+        let p = v * (1 - s)
+        let q = v * (1 - f * s)
+        let t = v * (1 - (1 - f) * s)
+
+        let (r, g, b): (Double, Double, Double)
+        switch i % 6 {
+        case 0: (r, g, b) = (v, t, p)
+        case 1: (r, g, b) = (q, v, p)
+        case 2: (r, g, b) = (p, v, t)
+        case 3: (r, g, b) = (p, q, v)
+        case 4: (r, g, b) = (t, p, v)
+        default: (r, g, b) = (v, p, q)
+        }
+
+        return DeviceColor(
+            r: Int((r * 255).rounded()),
+            g: Int((g * 255).rounded()),
+            b: Int((b * 255).rounded())
+        )
+    }
+
+    static func from(rgb: DeviceColor) -> HSVColor {
+        let r = Double(rgb.r) / 255.0
+        let g = Double(rgb.g) / 255.0
+        let b = Double(rgb.b) / 255.0
+
+        let maxValue = max(r, g, b)
+        let minValue = min(r, g, b)
+        let delta = maxValue - minValue
+
+        let hue: Double
+        if delta == 0 {
+            hue = 0
+        } else if maxValue == r {
+            hue = ((g - b) / delta).truncatingRemainder(dividingBy: 6) / 6
+        } else if maxValue == g {
+            hue = (((b - r) / delta) + 2) / 6
+        } else {
+            hue = (((r - g) / delta) + 4) / 6
+        }
+
+        return HSVColor(
+            hue: hue < 0 ? hue + 1 : hue,
+            saturation: maxValue == 0 ? 0 : delta / maxValue,
+            brightness: maxValue
+        )
     }
 }
 

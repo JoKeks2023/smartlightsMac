@@ -88,6 +88,16 @@ struct DeviceColor: Codable, Hashable {
     var b: Int
 }
 
+struct SavedColorPreset: Codable, Hashable, Identifiable {
+    let id: String
+    var color: DeviceColor
+
+    init(id: String = UUID().uuidString, color: DeviceColor) {
+        self.id = id
+        self.color = color
+    }
+}
+
 enum DMXChannelFunction: String, Codable, CaseIterable {
     case dimmer = "Dimmer"
     case red = "Red"
@@ -304,6 +314,13 @@ final class SettingsStore: ObservableObject {
             }
         }
     }
+    @Published var savedColorPresets: [SavedColorPreset] = [] {
+        didSet {
+            if let encoded = try? JSONEncoder().encode(savedColorPresets) {
+                userDefaults.set(encoded, forKey: "savedColorPresets")
+            }
+        }
+    }
     
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
@@ -333,6 +350,28 @@ final class SettingsStore: ObservableObject {
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             self.hueBridgeCredentials = decoded
         }
+
+        if let data = userDefaults.data(forKey: "savedColorPresets"),
+           let decoded = try? JSONDecoder().decode([SavedColorPreset].self, from: data) {
+            self.savedColorPresets = decoded
+        }
+    }
+
+    func saveColorPreset(_ color: DeviceColor) {
+        if let existingIndex = savedColorPresets.firstIndex(where: { $0.color == color }) {
+            let existing = savedColorPresets.remove(at: existingIndex)
+            savedColorPresets.insert(existing, at: 0)
+            return
+        }
+
+        savedColorPresets.insert(SavedColorPreset(color: color), at: 0)
+        if savedColorPresets.count > 16 {
+            savedColorPresets = Array(savedColorPresets.prefix(16))
+        }
+    }
+
+    func deleteColorPreset(id: String) {
+        savedColorPresets.removeAll { $0.id == id }
     }
 }
 
