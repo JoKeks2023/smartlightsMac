@@ -315,40 +315,50 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
     }
 
     private func makeBrightnessSliderItem() -> NSTouchBarItem {
-        let item = NSSliderTouchBarItem(identifier: Identifier.brightnessSlider)
         let brightness = currentDevice()?.brightness ?? 50
-        item.target = self
-        item.action = #selector(changeBrightness(_:))
-        item.label = nil
-        item.minimumSliderWidth = 260
-        item.maximumSliderWidth = 340
-        item.slider.minValue = 0
-        item.slider.maxValue = 100
-        item.slider.doubleValue = Double(brightness)
-        item.slider.trackFillColor = accentColor
-        item.minimumValueAccessory = NSSliderAccessory(image: NSImage(systemSymbolName: "sun.min.fill", accessibilityDescription: "Dimmer") ?? NSImage())
-        item.maximumValueAccessory = NSSliderAccessory(image: NSImage(systemSymbolName: "sun.max.fill", accessibilityDescription: "Brighter") ?? NSImage())
-        item.valueAccessoryWidth = .default
+        let item = NSCustomTouchBarItem(identifier: Identifier.brightnessSlider)
+        let view = TouchBarValueSliderView(
+            leadingSymbolName: "sun.min.fill",
+            trailingSymbolName: "sun.max.fill",
+            accentColor: accentColor,
+            showsValueLabel: false,
+            valueFormatter: { _ in "" }
+        )
+        view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            view.widthAnchor.constraint(equalToConstant: 360),
+            view.heightAnchor.constraint(equalToConstant: 30)
+        ])
+        view.configure(minValue: 0, maxValue: 100, value: Double(brightness))
+        view.onValueChanged = { [weak self] value in
+            self?.handleBrightnessChange(value: value)
+        }
+        item.view = view
         item.customizationLabel = "Brightness"
         item.visibilityPriority = .high
         return item
     }
 
     private func makeColorTemperatureSliderItem() -> NSTouchBarItem {
-        let item = NSSliderTouchBarItem(identifier: Identifier.colorTempSlider)
         let temperature = currentDevice()?.colorTemperature ?? 4000
-        item.target = self
-        item.action = #selector(changeColorTemperature(_:))
-        item.label = "\(temperature)K"
-        item.minimumSliderWidth = 260
-        item.maximumSliderWidth = 340
-        item.slider.minValue = 2000
-        item.slider.maxValue = 9000
-        item.slider.doubleValue = Double(temperature)
-        item.slider.trackFillColor = accentColor
-        item.minimumValueAccessory = NSSliderAccessory(image: NSImage(systemSymbolName: "thermometer.low", accessibilityDescription: "Warmer") ?? NSImage())
-        item.maximumValueAccessory = NSSliderAccessory(image: NSImage(systemSymbolName: "thermometer.high", accessibilityDescription: "Cooler") ?? NSImage())
-        item.valueAccessoryWidth = .default
+        let item = NSCustomTouchBarItem(identifier: Identifier.colorTempSlider)
+        let view = TouchBarValueSliderView(
+            leadingSymbolName: "thermometer.low",
+            trailingSymbolName: "thermometer.high",
+            accentColor: accentColor,
+            showsValueLabel: true,
+            valueFormatter: { "\(Int($0.rounded()))K" }
+        )
+        view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            view.widthAnchor.constraint(equalToConstant: 390),
+            view.heightAnchor.constraint(equalToConstant: 30)
+        ])
+        view.configure(minValue: 2000, maxValue: 9000, value: Double(temperature))
+        view.onValueChanged = { [weak self] value in
+            self?.handleColorTemperatureChange(value: value)
+        }
+        item.view = view
         item.customizationLabel = "Color Temperature"
         item.visibilityPriority = .high
         return item
@@ -410,17 +420,8 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
         }
     }
 
-    @objc private func changeBrightness(_ sender: Any?) {
-        let brightnessValue: Double
-        if let sliderItem = sender as? NSSliderTouchBarItem {
-            brightnessValue = sliderItem.slider.doubleValue
-        } else if let slider = sender as? NSSlider {
-            brightnessValue = slider.doubleValue
-        } else {
-            return
-        }
-
-        let brightness = Int(brightnessValue.rounded())
+    private func handleBrightnessChange(value: Double) {
+        let brightness = Int(value.rounded())
         updateSelectedDevice(brightness: brightness)
 
         brightnessTask?.cancel()
@@ -431,20 +432,8 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
         }
     }
 
-    @objc private func changeColorTemperature(_ sender: Any?) {
-        let temperatureValue: Double
-        if let sliderItem = sender as? NSSliderTouchBarItem {
-            temperatureValue = sliderItem.slider.doubleValue
-        } else if let slider = sender as? NSSlider {
-            temperatureValue = slider.doubleValue
-        } else {
-            return
-        }
-
-        let temperature = Int(temperatureValue.rounded())
-        if let sliderItem = sender as? NSSliderTouchBarItem {
-            sliderItem.label = "\(temperature)K"
-        }
+    private func handleColorTemperatureChange(value: Double) {
+        let temperature = Int(value.rounded())
         updateSelectedDevice(colorTemperature: temperature)
 
         colorTemperatureTask?.cancel()
@@ -541,6 +530,193 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
             selectColorPreset(at: selectedIndex)
         } else if scrubber === deviceScrubber {
             selectDevice(at: selectedIndex)
+        }
+    }
+}
+
+final class TouchBarValueSliderView: NSView {
+    var onValueChanged: ((Double) -> Void)?
+
+    private let leadingImageView = NSImageView()
+    private let trailingImageView = NSImageView()
+    private let valueLabel = NSTextField(labelWithString: "")
+    private let trackLayer = CALayer()
+    private let fillLayer = CALayer()
+    private let knobLayer = CALayer()
+
+    private let accentColor: NSColor
+    private let showsValueLabel: Bool
+    private let valueFormatter: (Double) -> String
+
+    private var minValue: Double = 0
+    private var maxValue: Double = 100
+    private var currentValue: Double = 50
+    private var isDragging = false
+
+    init(
+        leadingSymbolName: String,
+        trailingSymbolName: String,
+        accentColor: NSColor,
+        showsValueLabel: Bool,
+        valueFormatter: @escaping (Double) -> String
+    ) {
+        self.accentColor = accentColor
+        self.showsValueLabel = showsValueLabel
+        self.valueFormatter = valueFormatter
+        super.init(frame: .zero)
+
+        wantsLayer = true
+        layer?.masksToBounds = false
+        allowedTouchTypes = [.direct]
+
+        configureImageView(leadingImageView, symbolName: leadingSymbolName)
+        configureImageView(trailingImageView, symbolName: trailingSymbolName)
+
+        valueLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        valueLabel.textColor = .secondaryLabelColor
+        valueLabel.alignment = .right
+        valueLabel.isHidden = !showsValueLabel
+        valueLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        [leadingImageView, trailingImageView, valueLabel].forEach(addSubview)
+        [leadingImageView, trailingImageView, valueLabel].forEach { $0.translatesAutoresizingMaskIntoConstraints = false }
+
+        trackLayer.backgroundColor = NSColor.white.withAlphaComponent(0.14).cgColor
+        trackLayer.cornerRadius = 7
+        fillLayer.backgroundColor = accentColor.cgColor
+        fillLayer.cornerRadius = 7
+        knobLayer.backgroundColor = NSColor.white.withAlphaComponent(0.96).cgColor
+        knobLayer.cornerRadius = 9
+        knobLayer.shadowColor = NSColor.black.withAlphaComponent(0.25).cgColor
+        knobLayer.shadowOpacity = 1
+        knobLayer.shadowRadius = 3
+        knobLayer.shadowOffset = CGSize(width: 0, height: 1)
+
+        layer?.addSublayer(trackLayer)
+        layer?.addSublayer(fillLayer)
+        layer?.addSublayer(knobLayer)
+
+        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(handleClick(_:)))
+        let panGesture = NSPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        clickGesture.allowedTouchTypes = [.direct]
+        panGesture.allowedTouchTypes = [.direct]
+        panGesture.buttonMask = 0
+        addGestureRecognizer(clickGesture)
+        addGestureRecognizer(panGesture)
+
+        NSLayoutConstraint.activate([
+            leadingImageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            leadingImageView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            leadingImageView.widthAnchor.constraint(equalToConstant: 16),
+            leadingImageView.heightAnchor.constraint(equalToConstant: 16),
+
+            trailingImageView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            trailingImageView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            trailingImageView.widthAnchor.constraint(equalToConstant: 16),
+            trailingImageView.heightAnchor.constraint(equalToConstant: 16),
+
+            valueLabel.trailingAnchor.constraint(equalTo: trailingImageView.leadingAnchor, constant: -10),
+            valueLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            valueLabel.widthAnchor.constraint(equalToConstant: showsValueLabel ? 52 : 0)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: showsValueLabel ? 390 : 360, height: 30)
+    }
+
+    func configure(minValue: Double, maxValue: Double, value: Double) {
+        self.minValue = minValue
+        self.maxValue = maxValue
+        self.currentValue = max(minValue, min(maxValue, value))
+        updateLayers(animated: false)
+    }
+
+    override func layout() {
+        super.layout()
+        updateLayers(animated: false)
+    }
+
+    private func configureImageView(_ imageView: NSImageView, symbolName: String) {
+        imageView.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+        imageView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+        imageView.contentTintColor = .secondaryLabelColor
+    }
+
+    private var trackRect: CGRect {
+        let leftInset: CGFloat = 30
+        let rightInset: CGFloat = showsValueLabel ? 78 : 30
+        return CGRect(x: leftInset, y: bounds.midY - 7, width: max(80, bounds.width - leftInset - rightInset), height: 14)
+    }
+
+    private var progress: CGFloat {
+        guard maxValue > minValue else { return 0 }
+        return CGFloat((currentValue - minValue) / (maxValue - minValue))
+    }
+
+    private func updateLayers(animated: Bool) {
+        guard bounds.width > 0 else { return }
+        let track = trackRect
+        let knobSize = CGSize(width: 18, height: 18)
+        let knobX = track.minX + progress * track.width - knobSize.width / 2
+        let knobFrame = CGRect(x: knobX, y: bounds.midY - knobSize.height / 2, width: knobSize.width, height: knobSize.height)
+        let fillFrame = CGRect(x: track.minX, y: track.minY, width: max(14, knobFrame.midX - track.minX), height: track.height)
+
+        valueLabel.stringValue = valueFormatter(currentValue)
+
+        let applyFrames = {
+            self.trackLayer.frame = track
+            self.fillLayer.frame = fillFrame
+            self.knobLayer.frame = knobFrame
+        }
+
+        if animated && !isDragging {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                self.trackLayer.frame = track
+                self.fillLayer.frame = fillFrame
+                self.knobLayer.frame = knobFrame
+            }
+        } else {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            applyFrames()
+            CATransaction.commit()
+        }
+    }
+
+    @objc private func handleClick(_ gesture: NSClickGestureRecognizer) {
+        setValue(for: gesture.location(in: self), animated: true, notify: true)
+    }
+
+    @objc private func handlePan(_ gesture: NSPanGestureRecognizer) {
+        switch gesture.state {
+        case .began:
+            isDragging = true
+            setValue(for: gesture.location(in: self), animated: false, notify: true)
+        case .changed:
+            setValue(for: gesture.location(in: self), animated: false, notify: true)
+        default:
+            isDragging = false
+            setValue(for: gesture.location(in: self), animated: true, notify: true)
+        }
+    }
+
+    private func setValue(for location: CGPoint, animated: Bool, notify: Bool) {
+        let track = trackRect
+        guard track.width > 0 else { return }
+        let clampedX = min(max(location.x, track.minX), track.maxX)
+        let normalized = (clampedX - track.minX) / track.width
+        let value = minValue + Double(normalized) * (maxValue - minValue)
+        currentValue = value
+        updateLayers(animated: animated)
+        if notify {
+            onValueChanged?(value)
         }
     }
 }

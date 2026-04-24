@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var showColorPicker = false
     @State private var showDMXConfig = false
     @State private var dmxConfigDevice: GoveeDevice?
+    @State private var isSyncingControlState = false
 
     var body: some View {
         NavigationSplitView {
@@ -148,17 +149,26 @@ struct ContentView: View {
 
     private var deviceControls: some View {
         VStack(spacing: 12) {
-            Toggle("Power", isOn: $isOn).onChange(of: isOn) { v in Task { await controller.setPower(on: v) } }
+            Toggle("Power", isOn: $isOn).onChange(of: isOn) { v in
+                guard !isSyncingControlState else { return }
+                Task { await controller.setPower(on: v) }
+            }
             HStack {
                 Text("Brightness").frame(width: 90, alignment: .leading)
-                Slider(value: $brightness, in: 0...100, step: 1).tint(.orange).onChange(of: brightness) { val in Task { await controller.setBrightness(Int(val)) } }
+                Slider(value: $brightness, in: 0...100, step: 1).tint(.orange).onChange(of: brightness) { val in
+                    guard !isSyncingControlState else { return }
+                    Task { await controller.setBrightness(Int(val)) }
+                }
                 Text("\(Int(brightness))%")
                     .frame(width: 50, alignment: .trailing)
             }
             if currentDevice?.supportsColorTemperature == true {
                 HStack {
                     Text("Color Temp").frame(width: 90, alignment: .leading)
-                    Slider(value: $colorTemperature, in: 2000...9000, step: 100).tint(.yellow).onChange(of: colorTemperature) { val in Task { await controller.setColorTemperature(Int(val)) } }
+                    Slider(value: $colorTemperature, in: 2000...9000, step: 100).tint(.yellow).onChange(of: colorTemperature) { val in
+                        guard !isSyncingControlState else { return }
+                        Task { await controller.setColorTemperature(Int(val)) }
+                    }
                     Text("\(Int(colorTemperature))K").frame(width: 80, alignment: .trailing)
                 }
             }
@@ -255,6 +265,7 @@ struct ContentView: View {
 
     private func syncControlStateFromSelection() {
         guard let device = currentDevice else { return }
+        isSyncingControlState = true
         if let deviceIsOn = device.isOn {
             isOn = deviceIsOn
         }
@@ -270,6 +281,9 @@ struct ContentView: View {
                 green: Double(deviceColor.g) / 255.0,
                 blue: Double(deviceColor.b) / 255.0
             )
+        }
+        DispatchQueue.main.async {
+            isSyncingControlState = false
         }
     }
     
