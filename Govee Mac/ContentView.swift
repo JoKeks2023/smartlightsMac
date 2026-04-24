@@ -65,6 +65,10 @@ struct ContentView: View {
             }
         }
         .background(TouchBarBridge(deviceStore: deviceStore, controller: controller))
+        .onAppear(perform: syncControlStateFromSelection)
+        .onChange(of: controlSyncSignature) { _ in
+            syncControlStateFromSelection()
+        }
     }
 
     // MARK: Sections
@@ -236,6 +240,38 @@ struct ContentView: View {
         if let dev = currentDevice { return transportBadge(dev) }
         if deviceStore.selectedGroupID != nil { return "Group" }
         return "" }
+    private var controlSyncSignature: String {
+        let selected = deviceStore.selectedDeviceID ?? "none"
+        guard let device = currentDevice else { return selected }
+        let color = device.color.map { "\($0.r),\($0.g),\($0.b)" } ?? "none"
+        return [
+            selected,
+            device.isOn.map(String.init) ?? "nil",
+            device.brightness.map(String.init) ?? "nil",
+            device.colorTemperature.map(String.init) ?? "nil",
+            color
+        ].joined(separator: "|")
+    }
+
+    private func syncControlStateFromSelection() {
+        guard let device = currentDevice else { return }
+        if let deviceIsOn = device.isOn {
+            isOn = deviceIsOn
+        }
+        if let deviceBrightness = device.brightness {
+            brightness = Double(deviceBrightness)
+        }
+        if let deviceTemperature = device.colorTemperature {
+            colorTemperature = Double(deviceTemperature)
+        }
+        if let deviceColor = device.color {
+            color = Color(
+                red: Double(deviceColor.r) / 255.0,
+                green: Double(deviceColor.g) / 255.0,
+                blue: Double(deviceColor.b) / 255.0
+            )
+        }
+    }
     
     private func isValidIPAddress(_ ip: String) -> Bool {
         let parts = ip.split(separator: ".")

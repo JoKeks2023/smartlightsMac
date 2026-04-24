@@ -15,6 +15,7 @@
 		5B80D9CF2EDCB12A000DBD74 /* Govee_MacTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9CE2EDCB12A000DBD74 /* Govee_MacTests.swift */; };
 		5B80D9D92EDCB12B000DBD74 /* Govee_MacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9D82EDCB12B000DBD74 /* Govee_MacUITests.swift */; };
 		5B80D9DB2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9DA2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift */; };
+		5BF053102F9BDB23007ADBA3 /* TouchBarSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BF0530F2F9BDB23007ADBA3 /* TouchBarSupport.swift */; };
 		CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688AE791B97D4E60A2269386 /* MenuBarController.swift */; };
 /* End PBXBuildFile section */
 
@@ -49,6 +50,7 @@
 		5B80D9D42EDCB12B000DBD74 /* Govee MacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Govee MacUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B80D9D82EDCB12B000DBD74 /* Govee_MacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Govee_MacUITests.swift; sourceTree = "<group>"; };
 		5B80D9DA2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Govee_MacUITestsLaunchTests.swift; sourceTree = "<group>"; };
+		5BF0530F2F9BDB23007ADBA3 /* TouchBarSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchBarSupport.swift; sourceTree = "<group>"; };
 		688AE791B97D4E60A2269386 /* MenuBarController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -108,6 +110,7 @@
 				5B80D9C02EDCB12A000DBD74 /* Assets.xcassets */,
 				5B80D9C52EDCB12A000DBD74 /* Govee_Mac.entitlements */,
 				5B80D9C22EDCB12A000DBD74 /* Preview Content */,
+				5BF0530F2F9BDB23007ADBA3 /* TouchBarSupport.swift */,
 			);
 			path = "Govee Mac";
 			sourceTree = "<group>";
@@ -268,6 +271,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5B80D9BF2EDCB128000DBD74 /* ContentView.swift in Sources */,
+				5BF053102F9BDB23007ADBA3 /* TouchBarSupport.swift in Sources */,
 				CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */,
 				209313B605604EAF8C30C5D6 /* GoveeModels.swift in Sources */,
 				5B80D9BD2EDCB128000DBD74 /* Govee_MacApp.swift in Sources */,

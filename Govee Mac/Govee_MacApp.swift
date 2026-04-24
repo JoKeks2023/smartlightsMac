@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 @main
 struct Govee_MacApp: App {
@@ -11,6 +12,8 @@ struct Govee_MacApp: App {
     @State private var showWelcome: Bool
 
     init() {
+        NSApplication.shared.isAutomaticCustomizeTouchBarMenuItemEnabled = true
+
         let settingsStore = SettingsStore()
         let store = DeviceStore()
         let profiles = DMXProfileStore()

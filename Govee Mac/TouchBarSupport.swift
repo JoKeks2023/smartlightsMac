@@ -61,6 +61,8 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
     private weak var colorPresetScrubber: NSScrubber?
     private weak var colorPopoverItem: NSPopoverTouchBarItem?
 
+    private let accentColor = NSColor.controlAccentColor
+
     private enum TouchBarMode {
         case devices
         case device(String)
@@ -225,11 +227,11 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
         scrubber.register(NSScrubberTextItemView.self, forItemIdentifier: NSUserInterfaceItemIdentifier("DeviceTextItem"))
 
         let layout = NSScrubberFlowLayout()
-        layout.itemSpacing = 20
+        layout.itemSpacing = 28
         scrubber.scrubberLayout = layout
         scrubber.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            scrubber.widthAnchor.constraint(equalToConstant: 420)
+            scrubber.widthAnchor.constraint(equalToConstant: 620)
         ])
 
         if case let .device(selectedID) = mode,
@@ -318,9 +320,12 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
         item.target = self
         item.action = #selector(changeBrightness(_:))
         item.label = nil
+        item.minimumSliderWidth = 260
+        item.maximumSliderWidth = 340
         item.slider.minValue = 0
         item.slider.maxValue = 100
         item.slider.doubleValue = Double(brightness)
+        item.slider.trackFillColor = accentColor
         item.minimumValueAccessory = NSSliderAccessory(image: NSImage(systemSymbolName: "sun.min.fill", accessibilityDescription: "Dimmer") ?? NSImage())
         item.maximumValueAccessory = NSSliderAccessory(image: NSImage(systemSymbolName: "sun.max.fill", accessibilityDescription: "Brighter") ?? NSImage())
         item.valueAccessoryWidth = .default
@@ -335,12 +340,15 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
         item.target = self
         item.action = #selector(changeColorTemperature(_:))
         item.label = "\(temperature)K"
+        item.minimumSliderWidth = 260
+        item.maximumSliderWidth = 340
         item.slider.minValue = 2000
         item.slider.maxValue = 9000
         item.slider.doubleValue = Double(temperature)
+        item.slider.trackFillColor = accentColor
         item.minimumValueAccessory = NSSliderAccessory(image: NSImage(systemSymbolName: "thermometer.low", accessibilityDescription: "Warmer") ?? NSImage())
         item.maximumValueAccessory = NSSliderAccessory(image: NSImage(systemSymbolName: "thermometer.high", accessibilityDescription: "Cooler") ?? NSImage())
-        item.valueAccessoryWidth = .wide
+        item.valueAccessoryWidth = .default
         item.customizationLabel = "Color Temperature"
         item.visibilityPriority = .high
         return item
@@ -514,6 +522,7 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
             let preset = DevicePreset.allCases[index]
             itemView.title = preset.title
             itemView.textField.alignment = .center
+            itemView.textField.font = .systemFont(ofSize: 0, weight: .medium)
             return itemView
         }
 
@@ -523,6 +532,7 @@ final class TouchBarCoordinator: NSObject, NSTouchBarDelegate, NSScrubberDataSou
         itemView.title = device.name
         itemView.textField.alignment = .center
         itemView.textField.lineBreakMode = .byTruncatingTail
+        itemView.textField.font = .systemFont(ofSize: 0, weight: .semibold)
         return itemView
     }
 
