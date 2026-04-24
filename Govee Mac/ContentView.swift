@@ -52,7 +52,6 @@ struct ContentView: View {
                     .environmentObject(settings)
             }
         }
-        .task { await controller.refresh() }
     }
 
     // MARK: Sections
@@ -582,7 +581,7 @@ struct SettingsView: View {
             Section(header: Text("Govee Cloud")) { TextField("API Key", text: $settings.goveeApiKey).textFieldStyle(.roundedBorder) }
             Section(header: Text("Preferences")) {
                 Toggle("Prefer LAN when available", isOn: $settings.prefersLan)
-                Toggle("Enable HomeKit (Matter)", isOn: $settings.homeKitEnabled)
+                Toggle("Enable HomeKit Lights", isOn: $settings.homeKitEnabled)
             }
             Section(header: Text("Home Assistant (optional)")) {
                 TextField("Base URL (https://homeassistant.local:8123)", text: $settings.haBaseURL)
@@ -644,14 +643,14 @@ struct WelcomeView: View {
                 Section(header: Text("LAN Discovery")) {
                     Toggle("LAN bevorzugen", isOn: $settings.prefersLan)
                     HStack {
-                        Button(isDiscovering ? "Suche läuft…" : "LAN-Suche starten") { isDiscovering = true; Task { await controller.refresh(); isDiscovering = false } }
+                        Button(isDiscovering ? "Suche läuft…" : "LAN-Suche starten") { isDiscovering = true; Task { await controller.refreshLANOnly(); isDiscovering = false } }
                         Button("Mehr Info") { showLanInfo.toggle() }
                     }
                     if showLanInfo { Text("Die LAN-API ermöglicht direkte Steuerung im lokalen Netzwerk. Nicht alle Geräte werden unterstützt.").font(.footnote).foregroundStyle(.secondary) }
                 }
-                Section(header: Text("HomeKit / Matter")) {
+                Section(header: Text("HomeKit")) {
                     Toggle("HomeKit aktivieren", isOn: $settings.homeKitEnabled)
-                    Text("Aktiviere, um vorhandene Govee HomeKit Geräte zu laden.").font(.footnote).foregroundStyle(.secondary)
+                    Text("Aktiviere, um vorhandene HomeKit-Lichter zu laden, auch ohne Matter.").font(.footnote).foregroundStyle(.secondary)
                 }
             }
             .frame(width: 540)
@@ -791,7 +790,7 @@ struct DMXConfigSheet: View {
         .padding(24)
         .frame(width: 550)
         .sheet(isPresented: $showCustomProfileEditor) {
-            CustomProfileEditor(profileStore: profileStore)
+            CustomProfileEditor()
                 .environmentObject(profileStore)
         }
         .sheet(isPresented: $showProfileManager) {

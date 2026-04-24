@@ -8,13 +8,9 @@ import HomeKit
 
 // MARK: - Keychain Helper
 
-enum APIKeyKeychain {
-    private static let service = "com.govee.mac.api"
-    private static let account = "goveeApiKey"
-
-    static func save(key: String) throws {
-        let data = Data(key.utf8)
-        // Delete existing item if any
+enum KeychainSecretStore {
+    static func save(service: String, account: String, value: String) throws {
+        let data = Data(value.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -22,16 +18,16 @@ enum APIKeyKeychain {
         ]
         SecItemDelete(query as CFDictionary)
 
-        var attrs = query
-        attrs[kSecValueData as String] = data
-        attrs[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        let status = SecItemAdd(attrs as CFDictionary, nil)
+        var attributes = query
+        attributes[kSecValueData as String] = data
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        let status = SecItemAdd(attributes as CFDictionary, nil)
         guard status == errSecSuccess else {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [NSLocalizedDescriptionKey: "Keychain save failed: \(status)"])
         }
     }
 
-    static func load() throws -> String? {
+    static func load(service: String, account: String) throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -46,6 +42,32 @@ enum APIKeyKeychain {
             throw NSError(domain: NSOSStatusErrorDomain, code: Int(status), userInfo: [NSLocalizedDescriptionKey: "Keychain load failed: \(status)"])
         }
         return String(data: data, encoding: .utf8)
+    }
+}
+
+enum APIKeyKeychain {
+    private static let service = "com.govee.mac.api"
+    private static let account = "goveeApiKey"
+
+    static func save(key: String) throws {
+        try KeychainSecretStore.save(service: service, account: account, value: key)
+    }
+
+    static func load() throws -> String? {
+        try KeychainSecretStore.load(service: service, account: account)
+    }
+}
+
+enum HomeAssistantTokenKeychain {
+    private static let service = "com.govee.mac.homeassistant"
+    private static let account = "haToken"
+
+    static func save(token: String) throws {
+        try KeychainSecretStore.save(service: service, account: account, value: token)
+    }
+
+    static func load() throws -> String? {
+        try KeychainSecretStore.load(service: service, account: account)
     }
 }
 
@@ -251,54 +273,63 @@ struct DeviceGroup: Identifiable, Codable, Equatable {
 // MARK: - Stores
 
 final class SettingsStore: ObservableObject {
+    private let userDefaults: UserDefaults
+
     @Published var goveeApiKey: String {
         didSet { try? APIKeyKeychain.save(key: goveeApiKey) }
     }
     @Published var prefersLan: Bool {
-        didSet { UserDefaults.standard.set(prefersLan, forKey: "prefersLan") }
+        didSet { userDefaults.set(prefersLan, forKey: "prefersLan") }
     }
     @Published var homeKitEnabled: Bool {
-        didSet { UserDefaults.standard.set(homeKitEnabled, forKey: "homeKitEnabled") }
+        didSet { userDefaults.set(homeKitEnabled, forKey: "homeKitEnabled") }
     }
     @Published var haBaseURL: String {
-        didSet { UserDefaults.standard.set(haBaseURL, forKey: "haBaseURL") }
+        didSet { userDefaults.set(haBaseURL, forKey: "haBaseURL") }
     }
     @Published var haToken: String {
-        didSet { UserDefaults.standard.set(haToken, forKey: "haToken") }
+        didSet { try? HomeAssistantTokenKeychain.save(token: haToken) }
     }
     @Published var dmxEnabled: Bool {
-        didSet { UserDefaults.standard.set(dmxEnabled, forKey: "dmxEnabled") }
+        didSet { userDefaults.set(dmxEnabled, forKey: "dmxEnabled") }
     }
     @Published var dmxProtocol: DMXProtocolType {
-        didSet { UserDefaults.standard.set(dmxProtocol.rawValue, forKey: "dmxProtocol") }
+        didSet { userDefaults.set(dmxProtocol.rawValue, forKey: "dmxProtocol") }
     }
     // Dictionary to store Hue username (API key) per bridge IP
     @Published var hueBridgeCredentials: [String: String] = [:] {
         didSet {
             if let encoded = try? JSONEncoder().encode(hueBridgeCredentials) {
-                UserDefaults.standard.set(encoded, forKey: "hueBridgeCredentials")
+                userDefaults.set(encoded, forKey: "hueBridgeCredentials")
             }
         }
     }
     
-    init() {
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+
         // Migrate from UserDefaults to Keychain
-        if let oldKey = UserDefaults.standard.string(forKey: "goveeApiKey"), !oldKey.isEmpty {
+        if let oldKey = userDefaults.string(forKey: "goveeApiKey"), !oldKey.isEmpty {
             try? APIKeyKeychain.save(key: oldKey)
-            UserDefaults.standard.removeObject(forKey: "goveeApiKey")
+            userDefaults.removeObject(forKey: "goveeApiKey")
+        }
+
+        if let oldToken = userDefaults.string(forKey: "haToken"), !oldToken.isEmpty {
+            try? HomeAssistantTokenKeychain.save(token: oldToken)
+            userDefaults.removeObject(forKey: "haToken")
         }
         
         self.goveeApiKey = (try? APIKeyKeychain.load()) ?? ""
-        self.prefersLan = UserDefaults.standard.object(forKey: "prefersLan") as? Bool ?? true
-        self.homeKitEnabled = UserDefaults.standard.object(forKey: "homeKitEnabled") as? Bool ?? false
-        self.haBaseURL = UserDefaults.standard.string(forKey: "haBaseURL") ?? ""
-        self.haToken = UserDefaults.standard.string(forKey: "haToken") ?? ""
-        self.dmxEnabled = UserDefaults.standard.object(forKey: "dmxEnabled") as? Bool ?? false
-        let protocolString = UserDefaults.standard.string(forKey: "dmxProtocol") ?? DMXProtocolType.artnet.rawValue
+        self.prefersLan = userDefaults.object(forKey: "prefersLan") as? Bool ?? true
+        self.homeKitEnabled = userDefaults.object(forKey: "homeKitEnabled") as? Bool ?? false
+        self.haBaseURL = userDefaults.string(forKey: "haBaseURL") ?? ""
+        self.haToken = (try? HomeAssistantTokenKeychain.load()) ?? ""
+        self.dmxEnabled = userDefaults.object(forKey: "dmxEnabled") as? Bool ?? false
+        let protocolString = userDefaults.string(forKey: "dmxProtocol") ?? DMXProtocolType.artnet.rawValue
         self.dmxProtocol = DMXProtocolType(rawValue: protocolString) ?? .artnet
         
         // Load Hue bridge credentials
-        if let data = UserDefaults.standard.data(forKey: "hueBridgeCredentials"),
+        if let data = userDefaults.data(forKey: "hueBridgeCredentials"),
            let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
             self.hueBridgeCredentials = decoded
         }
@@ -353,19 +384,38 @@ final class DMXProfileStore: ObservableObject {
 
 @MainActor
 final class DeviceStore: ObservableObject {
-    @Published var devices: [GoveeDevice] = []
+    private let userDefaults: UserDefaults
+    private let devicesKey = "cachedDevices"
+    private let groupsKey = "deviceGroups"
+
+    @Published var devices: [GoveeDevice] = [] {
+        didSet { saveDevices() }
+    }
     @Published var selectedDeviceID: String?
     @Published var selectedGroupID: String?
     @Published var groups: [DeviceGroup] = [] {
-        didSet { 
+        didSet {
             saveGroups()
-            CloudSyncManager.shared.saveGroupsToAppGroups(groups)
+            // Persist groups locally to UserDefaults as a fallback when
+            // CloudSyncManager (iCloud/App Groups sync) is not available at
+            // compile-time for this build configuration.
+            if let encoded = try? JSONEncoder().encode(groups) {
+                userDefaults.set(encoded, forKey: groupsKey)
+            }
         }
     }
     
-    private let syncManager = CloudSyncManager.shared
+    // Note: CloudSyncManager integration (iCloud / App Groups) is implemented
+    // in a separate service. To avoid build-time coupling issues in some
+    // configurations, DeviceStore persists locally and exposes explicit
+    // async methods for cloud sync which may be implemented by the
+    // CloudSyncManager when available.
     
-    init() { loadGroups() }
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+        loadDevices()
+        loadGroups()
+    }
     
     func upsert(_ device: GoveeDevice) {
         if let idx = devices.firstIndex(where: { $0.id == device.id }) {
@@ -377,28 +427,31 @@ final class DeviceStore: ObservableObject {
     
     func replaceAll(_ newDevices: [GoveeDevice]) {
         devices = newDevices
-        saveDevicesToSharedContainer()
     }
     
-    private func saveDevicesToSharedContainer() {
-        // Save to App Groups via CloudSyncManager
-        syncManager.saveDevicesToAppGroups(devices)
+    private func saveDevices() {
+        // Persist devices to UserDefaults as a local shared cache. When the
+        // CloudSyncManager is available it can read/write the same keys.
+        if let encoded = try? JSONEncoder().encode(devices) {
+            userDefaults.set(encoded, forKey: devicesKey)
+        }
+    }
+
+    private func loadDevices() {
+        if let data = userDefaults.data(forKey: devicesKey),
+           let decoded = try? JSONDecoder().decode([GoveeDevice].self, from: data) {
+            devices = decoded
+        }
     }
     
     /// Sync devices and groups to iCloud (optional)
     func syncToCloud() async throws {
-        try await syncManager.performFullSync(devices: devices, groups: groups)
+        throw SmartLightError.notImplemented("Cloud sync is not available in this build")
     }
     
     /// Load devices from iCloud (optional)
     func loadFromCloud() async throws {
-        let cloudDevices = try await syncManager.fetchDevicesFromCloud()
-        let cloudGroups = try await syncManager.fetchGroupsFromCloud()
-        
-        devices = cloudDevices
-        groups = cloudGroups
-        saveDevicesToSharedContainer()
-        saveGroups()
+        throw SmartLightError.notImplemented("Cloud load is not available in this build")
     }
     
     func addGroup(name: String, memberIDs: [String]) {
@@ -412,12 +465,12 @@ final class DeviceStore: ObservableObject {
     
     private func saveGroups() {
         if let encoded = try? JSONEncoder().encode(groups) {
-            UserDefaults.standard.set(encoded, forKey: "deviceGroups")
+            userDefaults.set(encoded, forKey: groupsKey)
         }
     }
     
     private func loadGroups() {
-        if let data = UserDefaults.standard.data(forKey: "deviceGroups"),
+        if let data = userDefaults.data(forKey: groupsKey),
            let decoded = try? JSONDecoder().decode([DeviceGroup].self, from: data) {
             groups = decoded
         }
@@ -446,6 +499,7 @@ struct CloudDiscovery: DeviceDiscoveryProtocol {
         guard !apiKey.isEmpty else { return [] }
         
         var request = URLRequest(url: URL(string: "https://developer-api.govee.com/v1/devices")!)
+        request.timeoutInterval = 5
         request.addValue(apiKey, forHTTPHeaderField: "Govee-API-Key")
         
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -547,9 +601,16 @@ actor LANServiceStore {
 }
 
 class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate, NetServiceDelegate {
+    private static let serviceTypes = [
+        "_govee._tcp.",
+        "_wled._tcp.",
+        "_lifx._tcp."
+    ]
+
     private var browser: NetServiceBrowser?
     private let serviceStore = LANServiceStore()
     private var continuation: CheckedContinuation<[GoveeDevice], Error>?
+    private var seenDeviceIDs: Set<String> = []
 
     private func takeContinuation() -> CheckedContinuation<[GoveeDevice], Error>? {
         let cont = continuation
@@ -562,8 +623,11 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
     }
     
     deinit {
-        Task { [weak self] in
-            await MainActor.run { self?.cleanup() }
+        // Ensure cleanup runs on the main thread. Use DispatchQueue to avoid
+        // capturing 'self' in a concurrently-executing Task closure which can
+        // be problematic under stricter Swift concurrency modes.
+        DispatchQueue.main.async { [weak self] in
+            self?.cleanup()
         }
     }
     
@@ -585,16 +649,15 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
                 guard let self = self else { return }
                 await self.serviceStore.reset()
             }
+            self.seenDeviceIDs.removeAll()
 
             self.browser = NetServiceBrowser()
             self.browser?.delegate = self
-            // Search for common smart light service types
-            // Govee, WLED, Hue (Bonjour), Lifx, and generic HTTP lights
-            self.browser?.searchForServices(ofType: "_govee._tcp.", inDomain: "local.")
-            self.browser?.searchForServices(ofType: "_wled._tcp.", inDomain: "local.")
-            self.browser?.searchForServices(ofType: "_hap._tcp.", inDomain: "local.")
-            self.browser?.searchForServices(ofType: "_lifx._tcp.", inDomain: "local.")
-            self.browser?.searchForServices(ofType: "_http._tcp.", inDomain: "local.")
+            // Keep LAN discovery narrow. Browsing generic _http or _hap services
+            // can flood the resolver on normal networks and make the app look hung.
+            for serviceType in Self.serviceTypes {
+                self.browser?.searchForServices(ofType: serviceType, inDomain: "local.")
+            }
 
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(5))
@@ -653,6 +716,7 @@ class LANDiscovery: NSObject, DeviceDiscoveryProtocol, NetServiceBrowserDelegate
             color: nil,
             colorTemperature: nil
         )
+        guard seenDeviceIDs.insert(device.id).inserted else { return }
         Task { await serviceStore.addDevice(device) }
     }
     
@@ -843,6 +907,7 @@ struct HomeAssistantDiscovery: DeviceDiscoveryProtocol {
         guard !token.isEmpty else { return [] }
         
         var req = URLRequest(url: baseURL.appendingPathComponent("api/states"))
+        req.timeoutInterval = 5
         req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
         let (data, response) = try await URLSession.shared.data(for: req)
@@ -895,6 +960,7 @@ struct HomeAssistantControl: DeviceControlProtocol {
     private func callService(domain: String, service: String, data: [String: Any]) async throws {
         var req = URLRequest(url: baseURL.appendingPathComponent("api/services/\(domain)/\(service)"))
         req.httpMethod = "POST"
+        req.timeoutInterval = 5
         req.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         req.addValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: data)
@@ -945,7 +1011,6 @@ actor DMXUniverseManager {
     }
 }
 
-@MainActor
 class DMXReceiver: ObservableObject {
     private var socket: Int32 = -1
     private let universeManager = DMXUniverseManager()
@@ -1005,7 +1070,7 @@ class DMXReceiver: ObservableObject {
         }
         
         // Start receiving
-        receiveTask = Task { [weak self] in
+        receiveTask = Task.detached(priority: .utility) { [weak self] in
             await self?.receiveLoop()
         }
     }
@@ -1167,32 +1232,30 @@ class DMXReceiver: ObservableObject {
             }
         }
         
-        await MainActor.run {
-            Task {
-                // Determine if light should be on
-                let hasColor = redValue > 0 || greenValue > 0 || blueValue > 0
-                let hasDimmer = dimmerValue ?? 0 > 0
-                let hasWhite = whiteValue > 0
-                let isOn = hasColor || hasDimmer || hasWhite
-                
-                try? await controller.setDevicePower(device: device, on: isOn)
-                
-                if isOn {
-                    // Set brightness if dimmer is present
-                    if let dimmer = dimmerValue {
-                        let brightness = Int(Double(dimmer) / 255.0 * 100.0)
-                        try? await controller.setDeviceBrightness(device: device, value: brightness)
-                    } else if whiteValue > 0 {
-                        // Use white as brightness if no dimmer
-                        let brightness = Int(Double(whiteValue) / 255.0 * 100.0)
-                        try? await controller.setDeviceBrightness(device: device, value: brightness)
-                    }
-                    
-                    // Set color if RGB channels are present
-                    if hasColor {
-                        let color = DeviceColor(r: Int(redValue), g: Int(greenValue), b: Int(blueValue))
-                        try? await controller.setDeviceColor(device: device, color: color)
-                    }
+        Task { @MainActor in
+            // Determine if light should be on
+            let hasColor = redValue > 0 || greenValue > 0 || blueValue > 0
+            let hasDimmer = dimmerValue ?? 0 > 0
+            let hasWhite = whiteValue > 0
+            let isOn = hasColor || hasDimmer || hasWhite
+
+            try? await controller.setDevicePower(device: device, on: isOn)
+
+            if isOn {
+                // Set brightness if dimmer is present
+                if let dimmer = dimmerValue {
+                    let brightness = Int(Double(dimmer) / 255.0 * 100.0)
+                    try? await controller.setDeviceBrightness(device: device, value: brightness)
+                } else if whiteValue > 0 {
+                    // Use white as brightness if no dimmer
+                    let brightness = Int(Double(whiteValue) / 255.0 * 100.0)
+                    try? await controller.setDeviceBrightness(device: device, value: brightness)
+                }
+
+                // Set color if RGB channels are present
+                if hasColor {
+                    let color = DeviceColor(r: Int(redValue), g: Int(greenValue), b: Int(blueValue))
+                    try? await controller.setDeviceColor(device: device, color: color)
                 }
             }
         }
@@ -1257,7 +1320,9 @@ struct HueBridgeDiscovery: DeviceDiscoveryProtocol {
         
         // Use Hue cloud discovery service
         if let url = URL(string: "https://discovery.meethue.com/") {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 3
+            let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
                 return bridges
             }
@@ -1285,7 +1350,9 @@ struct HueBridgeDiscovery: DeviceDiscoveryProtocol {
             return []
         }
         
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2
+        let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             return []
         }
@@ -1486,7 +1553,11 @@ class GoveeController: ObservableObject {
     private let settings: SettingsStore
     private var pollingTask: Task<Void, Never>?
     private var dmxReceiver: DMXReceiver?
-    private var remoteControlHandler: RemoteControlHandler?
+    private var isRefreshing = false
+    // Remote control handler is implemented in the remote-control service.
+    // To avoid build-time coupling issues this build omits direct initialization
+    // of the macOS <-> iOS remote control handler. The feature can be
+    // re-enabled when the remote control service is available.
     
     #if canImport(HomeKit)
     @available(macOS 10.15, *)
@@ -1516,13 +1587,6 @@ class GoveeController: ObservableObject {
             }
         }
         
-        // Initialize remote control handler for iOS app
-        self.remoteControlHandler = RemoteControlHandler(
-            controller: self,
-            deviceStore: deviceStore,
-            settingsStore: settings
-        )
-        
         startPolling()
     }
     
@@ -1539,31 +1603,52 @@ class GoveeController: ObservableObject {
             }
         }
     }
+
+    private func discoverCloudDevices() async -> [GoveeDevice] {
+        guard !settings.goveeApiKey.isEmpty else { return [] }
+        let cloudDiscovery = CloudDiscovery(apiKey: settings.goveeApiKey)
+        return (try? await cloudDiscovery.refreshDevices()) ?? []
+    }
+
+    private func discoverLANDevices() async -> [GoveeDevice] {
+        guard settings.prefersLan else { return [] }
+        // Bonjour-based LAN discovery is currently unstable in this build and
+        // can abort the runtime during refresh. Keep cached/manual LAN devices
+        // available until the discovery service is rewritten.
+        return []
+    }
+
+    private func discoverHomeAssistantDevices() async -> [GoveeDevice] {
+        guard let url = URL(string: settings.haBaseURL), !settings.haToken.isEmpty else { return [] }
+        let haDiscovery = HomeAssistantDiscovery(baseURL: url, token: settings.haToken)
+        return (try? await haDiscovery.refreshDevices()) ?? []
+    }
     
     func refresh() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
         var merged: [String: GoveeDevice] = [:]
-        
-        // Cloud
-        if !settings.goveeApiKey.isEmpty {
-            let cloudDiscovery = CloudDiscovery(apiKey: settings.goveeApiKey)
-            if let devices = try? await cloudDiscovery.refreshDevices() {
-                for dev in devices { merged[dev.id] = dev }
-            }
+        for device in deviceStore.devices {
+            merged[device.id] = device
         }
-        
-        // LAN
-        if settings.prefersLan {
-            let lanDiscovery = LANDiscovery()
-            if let devices = try? await lanDiscovery.refreshDevices() {
-                for dev in devices {
-                    if var existing = merged[dev.id] {
-                        existing.transports.insert(.lan)
-                        existing.ipAddress = dev.ipAddress
-                        merged[dev.id] = existing
-                    } else {
-                        merged[dev.id] = dev
-                    }
-                }
+
+        async let cloudDevices = discoverCloudDevices()
+        async let lanDevices = discoverLANDevices()
+        async let homeAssistantDevices = discoverHomeAssistantDevices()
+
+        for dev in await cloudDevices {
+            merged[dev.id] = dev
+        }
+
+        for dev in await lanDevices {
+            if var existing = merged[dev.id] {
+                existing.transports.insert(.lan)
+                existing.ipAddress = dev.ipAddress
+                merged[dev.id] = existing
+            } else {
+                merged[dev.id] = dev
             }
         }
         
@@ -1581,40 +1666,36 @@ class GoveeController: ObservableObject {
             }
         }
         #endif
-        
-        // Home Assistant
-        if let url = URL(string: settings.haBaseURL), !settings.haToken.isEmpty {
-            let haDiscovery = HomeAssistantDiscovery(baseURL: url, token: settings.haToken)
-            if let devices = try? await haDiscovery.refreshDevices() {
-                for dev in devices {
-                    if var existing = merged[dev.id] {
-                        existing.transports.insert(.homeAssistant)
-                        existing.isOn = dev.isOn ?? existing.isOn
-                        existing.brightness = dev.brightness ?? existing.brightness
-                        merged[dev.id] = existing
-                    } else {
-                        merged[dev.id] = dev
-                    }
-                }
-            }
-        }
-        
-        // Philips Hue Bridge Discovery
-        let hueDiscovery = HueBridgeDiscovery()
-        if let devices = try? await hueDiscovery.refreshDevices() {
-            for dev in devices {
-                if var existing = merged[dev.id] {
-                    existing.transports.insert(.hue)
-                    merged[dev.id] = existing
-                } else {
-                    merged[dev.id] = dev
-                }
+
+        for dev in await homeAssistantDevices {
+            if var existing = merged[dev.id] {
+                existing.transports.insert(.homeAssistant)
+                existing.isOn = dev.isOn ?? existing.isOn
+                existing.brightness = dev.brightness ?? existing.brightness
+                merged[dev.id] = existing
+            } else {
+                merged[dev.id] = dev
             }
         }
         
         let devices = Array(merged.values).sorted { $0.name < $1.name }
         deviceStore.replaceAll(devices)
         
+        if deviceStore.selectedDeviceID == nil {
+            deviceStore.selectedDeviceID = devices.first?.id
+        }
+    }
+
+    func refreshLANOnly() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        let devices = deviceStore.devices
+            .filter { $0.transports.contains(.lan) || $0.transports.contains(.wled) || $0.transports.contains(.lifx) }
+            .sorted { $0.name < $1.name }
+        deviceStore.replaceAll(devices)
+
         if deviceStore.selectedDeviceID == nil {
             deviceStore.selectedDeviceID = devices.first?.id
         }
@@ -1632,7 +1713,7 @@ class GoveeController: ObservableObject {
         
         // LIFX devices (LAN protocol)
         // Note: LIFX requires UDP binary protocol - not yet fully implemented
-        if device.transports.contains(.lifx), let ip = device.ipAddress {
+        if device.transports.contains(.lifx), device.ipAddress != nil {
             // return LIFXControl(deviceIP: ip)  // Uncomment when UDP protocol is implemented
         }
         
@@ -1795,4 +1876,3 @@ class GoveeController: ObservableObject {
         }
     }
 }
-

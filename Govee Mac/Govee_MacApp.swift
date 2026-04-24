@@ -43,7 +43,9 @@ struct Govee_MacApp: App {
                     await MainActor.run {
                         menuBarController.setup()
                     }
-                    await controller.refresh()
+                    Task(priority: .utility) {
+                        await controller.refresh()
+                    }
                 }
                 .onChange(of: deviceStore.devices) { _ in
                     menuBarController.updateMenu()

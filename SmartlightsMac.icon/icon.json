@@ -1,15 +1,28 @@
 {
-  "fill" : {
-    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
-  },
+  "fill" : "automatic",
   "groups" : [
     {
       "layers" : [
         {
-          "fill" : "none",
-          "glass" : false,
-          "image-name" : "ChatGPT Image 30. Nov. 2025, 19_41_43.png",
-          "name" : "ChatGPT Image 30. Nov. 2025, 19_41_43",
+          "glass-specializations" : [
+            {
+              "value" : true
+            },
+            {
+              "appearance" : "light",
+              "value" : true
+            },
+            {
+              "appearance" : "dark",
+              "value" : true
+            },
+            {
+              "appearance" : "tinted",
+              "value" : true
+            }
+          ],
+          "image-name" : "Bildebene 2.png",
+          "name" : "Bildebene 2",
           "position" : {
             "scale" : 1,
             "translation-in-points" : [
