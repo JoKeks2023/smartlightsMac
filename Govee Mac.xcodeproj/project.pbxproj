@@ -16,6 +16,7 @@
 		5B80D9D92EDCB12B000DBD74 /* Govee_MacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9D82EDCB12B000DBD74 /* Govee_MacUITests.swift */; };
 		5B80D9DB2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9DA2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift */; };
 		5BF053102F9BDB23007ADBA3 /* TouchBarSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BF0530F2F9BDB23007ADBA3 /* TouchBarSupport.swift */; };
+		5BF053122F9BE9EA007ADBA3 /* Documentation.docc in Sources */ = {isa = PBXBuildFile; fileRef = 5BF053112F9BE9EA007ADBA3 /* Documentation.docc */; };
 		CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688AE791B97D4E60A2269386 /* MenuBarController.swift */; };
 /* End PBXBuildFile section */
 
@@ -38,6 +39,10 @@
 
 /* Begin PBXFileReference section */
 		25ED2AEB88724B72A2E908DE /* GoveeModels.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = GoveeModels.swift; sourceTree = "<group>"; };
+		45A59A0A2FA0000100D0C001 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		45A59A0A2FA0000200D0C001 /* FEATURES.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = FEATURES.md; sourceTree = "<group>"; };
+		45A59A0A2FA0000300D0C001 /* MANUFACTURER_INTEGRATION.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = MANUFACTURER_INTEGRATION.md; sourceTree = "<group>"; };
+		45A59A0A2FA0000400D0C001 /* DMX_SETUP.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = DMX_SETUP.md; sourceTree = "<group>"; };
 		5B72C6132EDE0E9300C28329 /* Govee-Mac-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Govee-Mac-Info.plist"; sourceTree = SOURCE_ROOT; };
 		5B80D9B92EDCB128000DBD74 /* Govee Mac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Govee Mac.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B80D9BC2EDCB128000DBD74 /* Govee_MacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Govee_MacApp.swift; sourceTree = "<group>"; };
@@ -51,6 +56,7 @@
 		5B80D9D82EDCB12B000DBD74 /* Govee_MacUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Govee_MacUITests.swift; sourceTree = "<group>"; };
 		5B80D9DA2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Govee_MacUITestsLaunchTests.swift; sourceTree = "<group>"; };
 		5BF0530F2F9BDB23007ADBA3 /* TouchBarSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchBarSupport.swift; sourceTree = "<group>"; };
+		5BF053112F9BE9EA007ADBA3 /* Documentation.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = Documentation.docc; sourceTree = "<group>"; };
 		688AE791B97D4E60A2269386 /* MenuBarController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -79,9 +85,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		45A59A0A2FA0000500D0C001 /* .. */ = {
+			isa = PBXGroup;
+			children = (
+				45A59A0A2FA0000100D0C001 /* README.md */,
+				45A59A0A2FA0000200D0C001 /* FEATURES.md */,
+				45A59A0A2FA0000300D0C001 /* MANUFACTURER_INTEGRATION.md */,
+				45A59A0A2FA0000400D0C001 /* DMX_SETUP.md */,
+			);
+			path = ..;
+			sourceTree = "<group>";
+		};
 		5B80D9B02EDCB128000DBD74 = {
 			isa = PBXGroup;
 			children = (
+				5BF053112F9BE9EA007ADBA3 /* Documentation.docc */,
+				45A59A0A2FA0000500D0C001 /* .. */,
 				5B80D9BB2EDCB128000DBD74 /* Govee Mac */,
 				5B80D9CD2EDCB12A000DBD74 /* Govee MacTests */,
 				5B80D9D72EDCB12B000DBD74 /* Govee MacUITests */,
@@ -271,6 +290,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5B80D9BF2EDCB128000DBD74 /* ContentView.swift in Sources */,
+				5BF053122F9BE9EA007ADBA3 /* Documentation.docc in Sources */,
 				5BF053102F9BDB23007ADBA3 /* TouchBarSupport.swift in Sources */,
 				CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */,
 				209313B605604EAF8C30C5D6 /* GoveeModels.swift in Sources */,

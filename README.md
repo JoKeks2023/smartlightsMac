@@ -10,7 +10,7 @@
   </a>
 </div>
 
-A powerful, native macOS app to control your smart lights with support for **multiple manufacturers** including Govee, Philips Hue, LIFX, and more. Supports multiple protocols: Cloud API, LAN (local network), HomeKit/Matter, and Home Assistant.
+A powerful, native macOS app to control your smart lights with support for **multiple manufacturers** including Govee, Philips Hue, LIFX, WLED, and more. Supports multiple protocols: Cloud API, LAN (local network), HomeKit, and Home Assistant.
 
 > **📱 iOS Companion App**: Control your lights from your iPhone! Check out the [iOS Companion App](https://github.com/JoKeks2023/smartlightsMac-ios-companion) that syncs with this Mac app via CloudKit and App Groups.
 
@@ -27,19 +27,21 @@ A powerful, native macOS app to control your smart lights with support for **mul
 
 ### 🎮 Multi-Protocol Support
 - **☁️ Govee Cloud API** - Official API with full device support
-- **🏠 LAN Control** - Automatic mDNS/Bonjour discovery for local network control (faster response)
-- **💡 Philips Hue API** - ⭐ NEW: Native Hue Bridge discovery and control
-- **🌈 WLED API** - ⭐ NEW: Direct control for WLED controllers
-- **🔷 LIFX LAN** - ⭐ NEW: LIFX protocol support (work in progress)
-- **🍎 HomeKit/Matter** - Native integration with Apple Home devices (Hue, LIFX, Nanoleaf, etc.)
+- **🏠 LAN Control** - Fast local discovery and control for supported Govee LAN devices
+- **🌈 WLED API** - Direct control for WLED controllers
+- **🔷 LIFX LAN** - Work in progress
+- **🍎 HomeKit** - Native integration with Apple Home devices, including non-Matter lights
 - **🏡 Home Assistant** - REST API integration for advanced automation (supports all manufacturers)
 - **🎭 DMX Control** - ArtNet and sACN receiver for professional lighting control
 
 ### 🎨 User Interface
-- **Modern macOS Design** - Native SwiftUI interface with gradients and materials
+- **Native macOS Design** - SwiftUI interface with a more Apple-like settings experience
 - **Menu Bar Integration** - Quick access from the menu bar
 - **Device Grouping** - Control multiple lights simultaneously
-- **Live State Polling** - Automatic updates every 30 seconds
+- **Touch Bar Controls** - Device list, power, brightness, color temperature, and color controls on Touch Bar Macs
+- **Custom Color Picking** - In-app custom color picker and Touch Bar color control without relying on the default macOS picker
+- **Saved Color Presets** - Save and reuse favorite colors across launches
+- **Device Persistence** - Cached devices and settings restore on launch
 
 ### 🔒 Security & Privacy
 - **Keychain Storage** - API keys stored securely in macOS Keychain
@@ -68,7 +70,6 @@ A powerful, native macOS app to control your smart lights with support for **mul
 
 2. **Open in Xcode**
    ```bash
-   cd "Govee Mac"
    open "Govee Mac.xcodeproj"
    ```
 
@@ -97,13 +98,13 @@ A powerful, native macOS app to control your smart lights with support for **mul
 
 2. **LAN Discovery** (Optional, faster)
    - Enable "Prefer LAN when available" in Settings
-   - Click Refresh to discover local devices
+   - Run LAN discovery from Settings or Add Device
 
 #### For Philips Hue Users
 
 **Option 1: HomeKit Integration** (Easiest)
 1. Add your Philips Hue Bridge to the **Home** app
-2. In Govee Mac: Settings → Enable "HomeKit (Matter)"
+2. In Govee Mac: Settings → Enable HomeKit lights
 3. Grant permission when prompted
 4. Your Hue lights will appear automatically!
 
@@ -118,7 +119,7 @@ See [MANUFACTURER_INTEGRATION.md](MANUFACTURER_INTEGRATION.md) for detailed Phil
 
 3. **HomeKit** (For HomeKit-compatible devices)
    - Add devices to **Home** app first
-   - Enable "HomeKit (Matter)" in Settings
+   - Enable HomeKit lights in Settings
    - Grant permission when prompted
    - Your HomeKit devices will appear
 
@@ -140,6 +141,17 @@ See [MANUFACTURER_INTEGRATION.md](MANUFACTURER_INTEGRATION.md) for detailed Phil
 - Select a device from the sidebar
 - Use controls: Power, Brightness, Color, Color Temperature
 - Changes apply immediately
+
+### Touch Bar
+- With the main app window active on a Touch Bar Mac, devices appear in the Touch Bar
+- Tap a device to open its controls
+- Adjust power, brightness, color temperature, and color directly from the Touch Bar
+- Touch Bar changes update the app UI live
+
+### Color Presets
+- Open the custom color picker from a device
+- Choose a color and save it as a preset
+- Reuse saved presets in the app and from the Touch Bar
 
 ### Creating Groups
 1. Click "Add Group" in toolbar
@@ -174,17 +186,27 @@ The app intelligently routes commands based on availability:
 3. **Home Assistant** - Flexible automation platform
 4. **Cloud** - Govee official API (reliable fallback)
 
+### Recent Improvements
+- Startup no longer blocks on heavy discovery work
+- Device and settings persistence were improved so known devices survive relaunch
+- Home Assistant token storage moved to Keychain-backed storage
+- LAN discovery and LAN control were stabilized for supported Govee devices
+- Custom Touch Bar controls replaced unstable stock interactions where needed
+- The settings window was redesigned to use a more native macOS preferences layout
+
 ### Project Structure
 ```
 Govee Mac/
-├── GoveeModels.swift          # Models, stores, protocols, implementations
-├── Govee_MacApp.swift         # App entry point
-├── ContentView.swift          # Main UI
-├── MenuBarController.swift    # Menu bar integration
-├── Services/
-│   └── APIKeyKeychain.swift   # Secure storage
-├── GoveeWidget/               # Widget extension (optional)
-└── Assets.xcassets/           # App icons and assets
+├── Govee Mac/
+│   ├── GoveeModels.swift        # Models, stores, persistence, transports
+│   ├── Govee_MacApp.swift       # App entry point
+│   ├── ContentView.swift        # Main UI, settings, custom color picker
+│   ├── MenuBarController.swift  # Menu bar integration
+│   ├── TouchBarSupport.swift    # Touch Bar UI and controls
+│   └── Assets.xcassets/         # App icons and assets
+├── Govee MacTests/            # Unit tests
+├── Govee MacUITests/          # UI tests
+└── *.md                       # Root documentation
 ```
 
 ## 🤝 Contributing

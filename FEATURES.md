@@ -2,6 +2,20 @@
 
 ## 🎉 All Requested Features Implemented!
 
+## Recent App Status
+
+The codebase has moved beyond the earlier prototype state in a few important areas:
+
+- Device persistence now restores cached devices on launch.
+- Settings persistence was hardened, and sensitive tokens are no longer kept only in plain `UserDefaults`.
+- LAN discovery and LAN control were reworked for supported Govee LAN devices.
+- HomeKit wording was corrected to reflect support for non-Matter HomeKit lights.
+- The settings window now uses a more native macOS preferences-style layout.
+- Touch Bar support was added and refined with custom controls for brightness, color temperature, and color.
+- The default macOS color picker was replaced by custom in-app and Touch Bar color controls.
+- Saved color presets now persist across launches.
+- Unit test coverage was expanded around persistence-related behavior.
+
 ## 🌟 Multi-Manufacturer Support
 
 The app supports controlling smart lights from **multiple manufacturers**:
@@ -21,22 +35,21 @@ See [MANUFACTURER_INTEGRATION.md](MANUFACTURER_INTEGRATION.md) for complete inte
 Native Hue Bridge control and direct WLED REST control work without HomeKit or Home Assistant when configured, while HomeKit/HA remain available for broader multi-brand support.
 
 ### ✅ 1. LAN Auto-Discovery
-**Implementation:** `GoveeModels.swift` - `LANDiscovery` class
-- Uses NetService (Bonjour/mDNS) to automatically discover devices on local network
-- Scans for multiple service types: Govee, WLED, HAP (HomeKit), LIFX, generic HTTP
-- Automatically resolves IP addresses and adds devices to the list
-- 5-second timeout for discovery
-- Devices are tagged with `.lan` transport
+**Implementation:** `GoveeModels.swift` - `LANDiscovery` and LAN control path
+- Discovers supported Govee LAN devices on the local network
+- Uses the app's current LAN discovery/control flow instead of the earlier unstable generic Bonjour scan
+- Adds devices with LAN-capable transports and prefers local control when available
+- Designed to keep the app responsive during startup and manual scans
 
 **How it works:**
 - Enable "Prefer LAN when available" in Settings
-- Click Refresh to trigger LAN discovery
+- Run LAN discovery from Settings or Add Device
 - Discovered devices will show "LAN" badge in the UI
 - LAN control is preferred when available (faster than Cloud)
 
 ### ✅ 2. HomeKit Integration (Supports Multiple Manufacturers)
 **Implementation:** `GoveeModels.swift` - `HomeKitManager` and `HomeKitControl`
-- Full HomeKit/Matter device support
+- Full HomeKit device support, including non-Matter lights
 - Discovers **any** HomeKit-compatible smart light (not just Govee)
 - Works with Philips Hue, LIFX, Nanoleaf, Eve, Meross, and more
 - Reads characteristics: power, brightness, hue/saturation, color temperature
@@ -45,7 +58,7 @@ Native Hue Bridge control and direct WLED REST control work without HomeKit or H
 
 **How to enable:**
 1. First add your lights to the **Home** app (any HomeKit-compatible brand)
-2. In Govee Mac: Settings → Toggle "Enable HomeKit (Matter)"
+2. In Govee Mac: Settings → Enable HomeKit lights
 3. Grant HomeKit permission when prompted
 4. **All** your HomeKit lights will appear with "HomeKit" badge
 
@@ -80,6 +93,18 @@ Native Hue Bridge control and direct WLED REST control work without HomeKit or H
 - Optimistic updates: UI updates immediately when you control a device
 - Background polling keeps state synchronized
 - Task is cancelled on app termination
+
+### ✅ 4a. Persistence and Restore
+**Implementation:** `GoveeModels.swift` - `DeviceStore` and `SettingsStore`
+- Cached devices are restored on launch
+- Device mutations persist more consistently
+- Settings storage supports testing and safer persistence behavior
+- Home Assistant token handling was moved away from plain storage-only behavior
+
+### ✅ 4b. Test Coverage Improvements
+**Implementation:** `Govee MacTests/Govee_MacTests.swift`
+- Added unit tests focused on persistence and restore behavior
+- Covers cached device restore and settings persistence seams
 
 **Behavior:**
 - Starts automatically when app launches
@@ -214,6 +239,27 @@ When devices appear in multiple sources:
 - Capabilities merged (supports brightness if any source supports it)
 - State taken from most recent/reliable source
 - Model and name preserved from first discovery
+
+## Touch Bar and Color Controls
+
+### ✅ Touch Bar Support
+**Implementation:** `TouchBarSupport.swift`
+- Device list appears in the Touch Bar when the app window is active
+- Selecting a device reveals Touch Bar controls for power, brightness, color temperature, and color
+- Touch Bar changes update the main app UI live
+- Custom controls are used where stock Touch Bar behavior proved unstable or visually poor
+
+### ✅ Custom Color Picker
+**Implementation:** `ContentView.swift` and `TouchBarSupport.swift`
+- Replaces reliance on the default macOS color picker
+- Custom in-app picker supports hue, saturation, brightness, preview, and swatches
+- Touch Bar color control supports direct selection without using the crashing stock picker
+
+### ✅ Saved Color Presets
+**Implementation:** `SettingsStore`, `ContentView.swift`, and `TouchBarSupport.swift`
+- Save favorite colors from the app
+- Reuse saved presets in the app and Touch Bar
+- Presets persist across launches
 
 ## 📱 Usage Guide
 
