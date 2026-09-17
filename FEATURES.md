@@ -1,6 +1,16 @@
-# Govee Mac - Complete Feature Implementation
+# Govee Mac - Feature Status
 
-## 🎉 All Requested Features Implemented!
+_This file previously claimed "All Requested Features Implemented!" — that
+was not accurate. Corrected 2026-09-17 against the actual code
+(see `docs/tasks/T-0001_generaluberholung/`). Known gaps:_
+- _Philips Hue Bridge pairing (link-button flow) is unimplemented —
+  `HueBridgeDiscovery` always returns zero devices today._
+- _LIFX LAN control (`LIFXControl`) throws "not implemented" for every call._
+- _The Notification Center widget has no Xcode target — `GoveeWidget.swift`
+  exists but was never built (see `WIDGET_SETUP.md`)._
+- _The iOS companion sync bridge (CloudKit/Local-Network/Bluetooth,
+  `Services/`) was never part of the compiled target — moved to
+  `Archive/uncompiled-services-2026-09-17/`._
 
 ## Recent App Status
 
@@ -378,8 +388,7 @@ If auto-discovery doesn't find a device:
 
 ---
 
-**Build Status:** ✅ BUILD SUCCEEDED (without code signing)
-**All Features:** ✅ Implemented and tested
-**Ready for:** Code signing and distribution
-
-Enjoy your fully-featured Govee Mac app! 🎉
+**Build Status:** ✅ builds clean on the current Xcode toolchain (verified 2026-09-17)
+**Feature Status:** see corrected gap list at the top of this file — most
+manufacturer/protocol paths work, Hue pairing, LIFX control, and the widget
+target do not yet.
