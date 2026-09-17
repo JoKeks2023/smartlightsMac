@@ -1395,27 +1395,36 @@ jobs:
 
 ## 🗺 Future Roadmap
 
-### Completed Features ✅
+### Verified against code, 2026-09-17 (T-0001 overhaul) — read this before trusting any older claim in this file
 
 - [x] Govee Cloud API integration
-- [x] LAN auto-discovery (mDNS/Bonjour)
-- [x] HomeKit integration (Matter-compatible)
-- [x] Home Assistant integration (100+ brands)
-- [x] DMX control (ArtNet/sACN)
+- [x] Govee LAN discovery/control (UDP)
+- [x] HomeKit integration (any HomeKit light)
+- [x] Home Assistant integration (any HA light entity)
+- [x] DMX receive (ArtNet/sACN)
 - [x] Menu bar quick controls
 - [x] Device groups
 - [x] State polling
 - [x] Keychain security
-- [x] iOS companion app infrastructure
-- [x] Multi-transport sync (CloudKit, Local Network, Bluetooth)
-- [x] Native Philips Hue Bridge API
-- [x] WLED REST API integration
-- [x] LIFX LAN protocol (partial)
+- [x] WLED REST control (once discovered via LAN)
+- [ ] **iOS companion app infrastructure** — NOT actually built. The
+      `Services/` code (CloudSyncManager, MultiTransportSyncManager,
+      RemoteControlProtocol) was never part of the Xcode target (no entry in
+      `project.pbxproj`), so none of it compiled or ran. Moved to
+      `Archive/uncompiled-services-2026-09-17/`. Do not assume it works.
+- [ ] **Native Philips Hue Bridge API** — discovery/control code exists
+      (`HueTransport.swift`), but the bridge-pairing ("press link button")
+      flow was never implemented, so it currently finds zero lights.
+- [ ] **LIFX LAN protocol** — every `LIFXControl` method throws
+      "not implemented". Not partial, not functional at all today.
+- [ ] **Widget** — `GoveeWidget/GoveeWidget.swift` has no Xcode target; it
+      was never built (see `WIDGET_SETUP.md`).
 
 ### In Progress ⚙️
 
-- [ ] LIFX binary UDP protocol (complete implementation)
-- [ ] Hue Entertainment mode support
+- [ ] Hue Bridge pairing flow (see above)
+- [ ] LIFX binary UDP protocol (currently 0% implemented, not "partial")
+- [ ] Widget Extension target
 - [ ] Improved error handling and recovery
 
 ### Planned Enhancements 📋
@@ -1593,12 +1602,18 @@ See `CONTRIBUTING.md` for detailed guidelines.
 - **Swift**: 5.0
 
 ### Major Milestones
-- **2024**: Full multi-manufacturer support
-- **2024**: iOS companion infrastructure complete
-- **2024**: DMX control added
-- **2024**: Native Hue Bridge API
+- **2024**: Multi-manufacturer support via HomeKit/Home Assistant
+- **2024**: DMX receive added
 - **2024**: WLED integration
+- **2026-09**: T-0001 overhaul — corrected inflated docs, archived
+  never-compiled iOS sync code, split the monolith model file, started
+  finishing Hue pairing / widget target / Shortcuts (see
+  `docs/tasks/T-0001_generaluberholung/`)
 - **Initial**: Govee-only support
+
+Note: earlier versions of this file claimed "iOS companion infrastructure
+complete" and "Native Hue Bridge API" as finished milestones. Neither was
+true — see the verified status list above.
 
 ---
 
