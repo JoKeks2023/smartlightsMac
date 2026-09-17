@@ -294,24 +294,37 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🗺️ Roadmap
 
-### Completed Features
-- [x] DMX control (ArtNet/sACN)
-- [x] HomeKit integration (supports Philips Hue, LIFX, Nanoleaf, etc.)
-- [x] Home Assistant integration (supports all manufacturers)
-- [x] Multi-manufacturer support
-- [x] iOS companion app bridge (CloudKit + Local Network + Bluetooth sync)
-- [x] iOS full remote control (devices, groups, settings)
+_Last verified against the actual codebase: 2026-09-17 (see `docs/tasks/T-0001_generaluberholung/`)._
 
-### Planned Enhancements
-- [ ] Native Philips Hue Bridge API (direct control without HomeKit/HA)
-- [ ] LIFX LAN protocol implementation
-- [ ] iOS companion app UI (bridge infrastructure and control API complete)
+### Completed & verified in this build
+- [x] DMX receive (ArtNet/sACN) — maps incoming DMX to device power/brightness/color
+- [x] HomeKit integration (any HomeKit light, not just Govee)
+- [x] Home Assistant integration (REST API, works with any HA light entity)
+- [x] Govee Cloud API + Govee LAN discovery/control
+- [x] WLED control (direct REST, once a device is found via LAN discovery)
+
+### Partially implemented (code exists, not finished)
+- [ ] **Native Philips Hue Bridge API** — bridge discovery and light control code
+      exist, but the bridge-pairing ("press link button") flow was never
+      implemented, so `HueBridgeDiscovery` currently always returns zero
+      lights. Hue works today only via HomeKit or Home Assistant.
+- [ ] **LIFX LAN protocol** — `LIFXControl` exists but every method throws
+      "not implemented". LIFX works today only via HomeKit or Home Assistant.
+
+### Not implemented
 - [ ] Scenes and automation support
-- [ ] Custom color presets
 - [ ] Schedule/timer functionality
 - [ ] Music sync integration
 - [ ] Multi-window support
 - [ ] Shortcuts app integration
+
+### iOS companion app bridge — archived, not built
+An earlier iteration added CloudKit/Local-Network/Bluetooth sync code and a
+remote-control API intended for a companion iOS app. That code was **never
+part of the Xcode target** — it was not compiled, linked, or tested against
+this app. It has been moved to `Archive/uncompiled-services-2026-09-17/`
+pending a decision on whether to properly integrate it. Treat any previous
+claims of a "complete iOS bridge infrastructure" as aspirational, not shipped.
 
 ## 📱 iOS Companion App - Complete Infrastructure
 
