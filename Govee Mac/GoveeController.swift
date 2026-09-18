@@ -82,6 +82,27 @@ class GoveeController: ObservableObject {
         let haDiscovery = HomeAssistantDiscovery(baseURL: url, token: settings.haToken)
         return (try? await haDiscovery.refreshDevices()) ?? []
     }
+
+    private func discoverHueDevices() async -> [GoveeDevice] {
+        guard !settings.hueBridgeCredentials.isEmpty else { return [] }
+        let hueDiscovery = HueBridgeDiscovery(credentials: settings.hueBridgeCredentials)
+        return (try? await hueDiscovery.refreshDevices()) ?? []
+    }
+
+    /// Finds Hue bridges on the network that are not yet paired with this app.
+    func discoverUnpairedHueBridges() async -> [HueBridgeCandidate] {
+        let known = Set(settings.hueBridgeCredentials.keys)
+        let candidates = await HueBridgeDiscovery.discoverCandidateBridges()
+        return candidates.filter { !known.contains($0.ip) }
+    }
+
+    /// Drives the Hue "press the link button" pairing flow for one bridge and
+    /// persists the resulting username on success.
+    func pairHueBridge(ip: String) async throws {
+        let username = try await HueBridgeDiscovery.pair(bridgeIP: ip)
+        settings.hueBridgeCredentials[ip] = username
+        await refresh()
+    }
     
     func refresh() async {
         guard !isRefreshing else { return }
@@ -96,8 +117,13 @@ class GoveeController: ObservableObject {
         async let cloudDevices = discoverCloudDevices()
         async let lanDevices = discoverLANDevices()
         async let homeAssistantDevices = discoverHomeAssistantDevices()
+        async let hueDevices = discoverHueDevices()
 
         for dev in await cloudDevices {
+            merged[dev.id] = dev
+        }
+
+        for dev in await hueDevices {
             merged[dev.id] = dev
         }
 
@@ -187,10 +213,11 @@ class GoveeController: ObservableObject {
             // return LIFXControl(deviceIP: ip)  // Uncomment when UDP protocol is implemented
         }
         
-        // Philips Hue Bridge devices
-        if device.transports.contains(.hue), let ip = device.ipAddress,
-           let username = settings.hueBridgeCredentials[ip] {
-            return HueBridgeControl(bridgeIP: ip, username: username)
+        // Philips Hue Bridge devices — device.ipAddress holds the bridge IP
+        // (see HueBridgeDiscovery), not the light's own address.
+        if device.transports.contains(.hue), let bridgeIP = device.ipAddress,
+           let username = settings.hueBridgeCredentials[bridgeIP] {
+            return HueBridgeControl(bridgeIP: bridgeIP, username: username)
         }
         
         if settings.prefersLan, device.transports.contains(.lan), let ip = device.ipAddress {

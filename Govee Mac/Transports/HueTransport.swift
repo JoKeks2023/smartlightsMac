@@ -2,69 +2,136 @@ import Foundation
 
 // MARK: - Philips Hue Bridge Implementation
 
+/// A Hue bridge found via discovery, before pairing.
+struct HueBridgeCandidate: Identifiable, Hashable {
+    var id: String { bridgeID }
+    let ip: String
+    let bridgeID: String
+}
+
+enum HueBridgeError: LocalizedError {
+    case linkButtonNotPressed
+    case pairingTimedOut
+    case bridgeUnreachable
+
+    var errorDescription: String? {
+        switch self {
+        case .linkButtonNotPressed:
+            return "Press the link button on the Hue Bridge, then try again."
+        case .pairingTimedOut:
+            return "Timed out waiting for the Hue Bridge link button."
+        case .bridgeUnreachable:
+            return "Could not reach the Hue Bridge on the network."
+        }
+    }
+}
+
 struct HueBridgeDiscovery: DeviceDiscoveryProtocol {
+    /// bridge IP -> paired username (SettingsStore.hueBridgeCredentials)
+    let credentials: [String: String]
+
+    init(credentials: [String: String] = [:]) {
+        self.credentials = credentials
+    }
+
     func refreshDevices() async throws -> [GoveeDevice] {
-        // Discover bridges using mDNS and Hue cloud discovery
-        let bridges = try await discoverBridges()
-        
+        // Only fetch lights from bridges we already have a paired username for.
+        // Un-paired bridges are surfaced separately via discoverCandidateBridges()
+        // + Self.pair(bridgeIP:) so the UI can drive the link-button flow.
         var devices: [GoveeDevice] = []
-        for bridge in bridges {
-            // Get lights from each bridge
-            let lights = try? await getLightsFromBridge(bridge)
-            if let lights = lights {
-                devices.append(contentsOf: lights)
-            }
+        for (ip, username) in credentials {
+            let lights = (try? await Self.fetchLights(bridgeIP: ip, username: username)) ?? []
+            devices.append(contentsOf: lights)
         }
         return devices
     }
-    
-    private func discoverBridges() async throws -> [(ip: String, id: String)] {
-        // Try mDNS discovery first via _hue._tcp service
-        // Then fall back to Hue cloud discovery API
-        var bridges: [(ip: String, id: String)] = []
-        
-        // Use Hue cloud discovery service
-        if let url = URL(string: "https://discovery.meethue.com/") {
+
+    /// Finds Hue bridges on the network via the official cloud discovery
+    /// endpoint (N-UPnP). Does not require pairing.
+    static func discoverCandidateBridges() async -> [HueBridgeCandidate] {
+        guard let url = URL(string: "https://discovery.meethue.com/") else { return [] }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 3
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return []
+        }
+        return json.compactMap { entry in
+            guard let ip = entry["internalipaddress"] as? String, let id = entry["id"] as? String else { return nil }
+            return HueBridgeCandidate(ip: ip, bridgeID: id)
+        }
+    }
+
+    /// Performs the Hue "press link button" pairing flow against a single
+    /// bridge: polls every second for up to `timeout` seconds, registering
+    /// an application username once the button is pressed. Returns the
+    /// username to persist (e.g. in SettingsStore.hueBridgeCredentials).
+    static func pair(bridgeIP: String, timeout: TimeInterval = 30) async throws -> String {
+        guard let url = URL(string: "http://\(bridgeIP)/api") else { throw HueBridgeError.bridgeUnreachable }
+        let deviceType = "govee_mac#\(Host.current().localizedName ?? "mac")"
+        let deadline = Date().addingTimeInterval(timeout)
+
+        while Date() < deadline {
             var request = URLRequest(url: url)
+            request.httpMethod = "POST"
             request.timeoutInterval = 3
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                return bridges
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["devicetype": deviceType])
+
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                throw HueBridgeError.bridgeUnreachable
             }
-            
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                for bridge in json {
-                    if let ip = bridge["internalipaddress"] as? String,
-                       let id = bridge["id"] as? String {
-                        bridges.append((ip: ip, id: id))
+
+            if let results = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                for result in results {
+                    if let success = result["success"] as? [String: Any], let username = success["username"] as? String {
+                        return username
+                    }
+                    if let failure = result["error"] as? [String: Any], let type = failure["type"] as? Int, type == 101 {
+                        // 101 = link button not pressed yet; keep polling.
                     }
                 }
             }
+
+            try await Task.sleep(nanoseconds: 1_000_000_000)
         }
-        
-        return bridges
+        throw HueBridgeError.pairingTimedOut
     }
-    
-    private func getLightsFromBridge(_ bridge: (ip: String, id: String)) async throws -> [GoveeDevice] {
-        // Note: This requires the user to have already registered an API key with the bridge
-        // For now, we'll skip lights that require authentication
-        // In a full implementation, we'd need to handle the "press link button" flow
-        
-        // Try to get config to check if we have access
-        guard let url = URL(string: "http://\(bridge.ip)/api/config") else {
-            return []
-        }
-        
+
+    private static func fetchLights(bridgeIP: String, username: String) async throws -> [GoveeDevice] {
+        guard let url = URL(string: "http://\(bridgeIP)/api/\(username)/lights") else { return [] }
         var request = URLRequest(url: url)
-        request.timeoutInterval = 2
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            return []
+        request.timeoutInterval = 3
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else { return [] }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: [String: Any]] else { return [] }
+
+        return json.compactMap { lightID, light -> GoveeDevice? in
+            guard let name = light["name"] as? String else { return nil }
+            let state = light["state"] as? [String: Any]
+            let modelID = light["modelid"] as? String
+            let isOn = state?["on"] as? Bool
+            let bri = state?["bri"] as? Int
+            let brightnessPercent = bri.map { Int(Double($0) / 254.0 * 100.0) }
+            let capabilities = (light["type"] as? String)?.lowercased() ?? ""
+
+            return GoveeDevice(
+                id: "hue-\(bridgeIP)-\(lightID)",
+                name: name,
+                model: modelID,
+                ipAddress: bridgeIP,
+                online: state?["reachable"] as? Bool ?? true,
+                supportsBrightness: true,
+                supportsColor: capabilities.contains("color") && !capabilities.contains("temperature"),
+                supportsColorTemperature: capabilities.contains("color temperature") || capabilities.contains("color"),
+                transports: [.hue],
+                isOn: isOn,
+                brightness: brightnessPercent,
+                color: nil,
+                colorTemperature: nil
+            )
         }
-        
-        // For now, return empty array since we need API key setup
-        // TODO: Implement API key registration flow with link button press
-        return []
     }
 }
 

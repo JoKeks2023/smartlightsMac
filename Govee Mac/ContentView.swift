@@ -1030,6 +1030,10 @@ struct SettingsView: View {
     @EnvironmentObject private var deviceStore: DeviceStore
     @State private var isScanningLAN = false
     @State private var lanStatus = "Use discovery to find nearby LAN-enabled lights."
+    @State private var isFindingHueBridges = false
+    @State private var hueCandidates: [HueBridgeCandidate] = []
+    @State private var pairingBridgeIP: String?
+    @State private var hueStatus: String?
 
     var body: some View {
         Form {
@@ -1089,6 +1093,61 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Section("Philips Hue") {
+                if settings.hueBridgeCredentials.isEmpty {
+                    Text("No paired Hue Bridges yet.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(settings.hueBridgeCredentials.keys).sorted(), id: \.self) { ip in
+                        LabeledContent(ip) {
+                            Button("Unpair", role: .destructive) {
+                                settings.hueBridgeCredentials.removeValue(forKey: ip)
+                            }
+                        }
+                    }
+                }
+
+                HStack(alignment: .center, spacing: 10) {
+                    Button(isFindingHueBridges ? "Searching..." : "Find Hue Bridges") {
+                        findHueBridges()
+                    }
+                    .disabled(isFindingHueBridges || pairingBridgeIP != nil)
+
+                    if isFindingHueBridges {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+
+                ForEach(hueCandidates) { candidate in
+                    HStack {
+                        Text(candidate.ip)
+                        Spacer()
+                        if pairingBridgeIP == candidate.ip {
+                            ProgressView().controlSize(.small)
+                            Text("Press the link button now...")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Button("Pair") { pair(candidate) }
+                                .disabled(pairingBridgeIP != nil)
+                        }
+                    }
+                }
+
+                if let hueStatus {
+                    Text(hueStatus)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Text("Pairing needs physical access to the bridge: press its round link button, then click Pair within 30 seconds.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("DMX") {
                 Toggle("Enable DMX Receiver", isOn: $settings.dmxEnabled)
 
@@ -1129,6 +1188,32 @@ struct SettingsView: View {
             let count = lanDeviceCount
             lanStatus = count == 0 ? "No LAN devices found. Manual IP entry is still available." : "Found \(count) LAN device\(count == 1 ? "" : "s")."
             isScanningLAN = false
+        }
+    }
+
+    private func findHueBridges() {
+        isFindingHueBridges = true
+        hueStatus = nil
+        Task {
+            let found = await controller.discoverUnpairedHueBridges()
+            hueCandidates = found
+            hueStatus = found.isEmpty ? "No unpaired Hue Bridges found on this network." : nil
+            isFindingHueBridges = false
+        }
+    }
+
+    private func pair(_ candidate: HueBridgeCandidate) {
+        pairingBridgeIP = candidate.ip
+        hueStatus = nil
+        Task {
+            do {
+                try await controller.pairHueBridge(ip: candidate.ip)
+                hueCandidates.removeAll { $0.ip == candidate.ip }
+                hueStatus = "Paired with \(candidate.ip)."
+            } catch {
+                hueStatus = error.localizedDescription
+            }
+            pairingBridgeIP = nil
         }
     }
 }
