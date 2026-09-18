@@ -57,6 +57,7 @@ struct Govee_MacApp: App {
                     menuBarController.updateMenu()
                 }
         }
+        .defaultSize(width: 1040, height: 700)
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Govee Mac") {

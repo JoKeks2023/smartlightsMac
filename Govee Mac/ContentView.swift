@@ -30,11 +30,18 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $deviceStore.selectedDeviceID) {
-                Section("Groups") { groupSection }
-                Section("Devices") { devicesSection }
+            Group {
+                if deviceStore.devices.isEmpty && deviceStore.groups.isEmpty {
+                    sidebarEmptyState
+                } else {
+                    List(selection: $deviceStore.selectedDeviceID) {
+                        if !deviceStore.groups.isEmpty { Section("Groups") { groupSection } }
+                        Section("Devices") { devicesSection }
+                    }
+                    .listStyle(.sidebar)
+                }
             }
-            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             .toolbar {
                 Button(action: { Task { await controller.refresh() } }) { Label("Refresh", systemImage: "arrow.clockwise") }
                 Button(action: { showSettings = true }) { Label("Settings", systemImage: "gearshape") }
@@ -43,6 +50,7 @@ struct ContentView: View {
                 if canShowColorControls { Button(action: { showColorPicker.toggle() }) { Label("Color", systemImage: "paintpalette") } }
             }
         } detail: { detailPane }
+        .frame(minWidth: 900, minHeight: 600)
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(settings)
@@ -71,6 +79,27 @@ struct ContentView: View {
         .onChange(of: controlSyncSignature) { _ in
             syncControlStateFromSelection()
         }
+    }
+
+    private var sidebarEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lightbulb")
+                .font(.system(size: 30))
+                .foregroundStyle(.tertiary)
+            Text("No devices yet")
+                .font(.headline)
+            Text("Add a device manually, or run discovery from Settings to find lights on your network.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 20)
+            Button("Add device") { showDeviceDiscovery = true }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
     }
 
     // MARK: Sections
@@ -208,8 +237,15 @@ struct ContentView: View {
     private var emptySelection: some View {
         VStack(spacing: 10) {
             Image(systemName: "lightbulb.slash").font(.system(size: 36)).foregroundStyle(.tertiary)
-            Text("No selection").font(.headline).foregroundStyle(.secondary)
-            Text("Select a device or group from the list.").font(.subheadline).foregroundStyle(.tertiary)
+            if deviceStore.devices.isEmpty {
+                Text("No devices yet").font(.headline).foregroundStyle(.secondary)
+                Button("Add device") { showDeviceDiscovery = true }
+                    .controlSize(.small)
+                    .padding(.top, 4)
+            } else {
+                Text("No selection").font(.headline).foregroundStyle(.secondary)
+                Text("Select a device or group from the list.").font(.subheadline).foregroundStyle(.tertiary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
