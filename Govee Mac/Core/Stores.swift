@@ -190,12 +190,20 @@ final class DeviceStore: ObservableObject {
         devices = newDevices
     }
     
+    /// App Group container the GoveeWidget extension reads from
+    /// (see GoveeWidget/GoveeWidget.swift and both targets' entitlements).
+    private static let widgetSharedSuiteName = "group.com.govee.mac"
+
     private func saveDevices() {
         // Persist devices to UserDefaults as a local shared cache. When the
         // CloudSyncManager is available it can read/write the same keys.
-        if let encoded = try? JSONEncoder().encode(devices) {
-            userDefaults.set(encoded, forKey: devicesKey)
-        }
+        guard let encoded = try? JSONEncoder().encode(devices) else { return }
+        userDefaults.set(encoded, forKey: devicesKey)
+
+        // Also mirror to the App Group suite so the widget extension (a
+        // separate process) can read the current device list. Best-effort:
+        // the suite may not exist in unit tests or non-sandboxed contexts.
+        UserDefaults(suiteName: Self.widgetSharedSuiteName)?.set(encoded, forKey: devicesKey)
     }
 
     private func loadDevices() {
