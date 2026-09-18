@@ -1395,27 +1395,43 @@ jobs:
 
 ## 🗺 Future Roadmap
 
-### Completed Features ✅
+### Verified against code, 2026-09-18 (T-0001 overhaul) — read this before trusting any older claim in this file
 
 - [x] Govee Cloud API integration
-- [x] LAN auto-discovery (mDNS/Bonjour)
-- [x] HomeKit integration (Matter-compatible)
-- [x] Home Assistant integration (100+ brands)
-- [x] DMX control (ArtNet/sACN)
+- [x] Govee LAN discovery/control (UDP)
+- [x] HomeKit integration (any HomeKit light)
+- [x] Home Assistant integration (any HA light entity)
+- [x] DMX receive (ArtNet/sACN)
 - [x] Menu bar quick controls
 - [x] Device groups
 - [x] State polling
 - [x] Keychain security
-- [x] iOS companion app infrastructure
-- [x] Multi-transport sync (CloudKit, Local Network, Bluetooth)
-- [x] Native Philips Hue Bridge API
-- [x] WLED REST API integration
-- [x] LIFX LAN protocol (partial)
+- [x] WLED REST control (once discovered via LAN)
+- [x] **Native Philips Hue Bridge API**, including the link-button pairing
+      flow (`HueTransport.swift`, `SettingsView` → Philips Hue section).
+      Build/test-verified 2026-09-18; not yet confirmed against a real
+      bridge.
+- [x] **GoveeWidgetExtension target** — a real WidgetKit extension now
+      exists and is embedded in the app bundle (`GoveeWidget/`). Shares
+      `Core/Models.swift` with the main target and reads devices from the
+      `group.com.govee.mac` App Group suite, which `DeviceStore` now
+      writes to. Build-verified; live widget-gallery registration not yet
+      confirmed (see `WIDGET_SETUP.md`).
+- [x] **Shortcuts/Siri via App Intents** — `AppIntents/DeviceIntents.swift`
+      donates power + brightness intents through `GoveeMacShortcuts`.
+      `ExtractAppIntentsMetadata` confirmed writing `Metadata.appintents`
+      (previously skipped entirely, no AppIntents dependency existed).
+- [ ] **iOS companion app infrastructure** — NOT actually built. The
+      `Services/` code (CloudSyncManager, MultiTransportSyncManager,
+      RemoteControlProtocol) was never part of the Xcode target (no entry in
+      `project.pbxproj`), so none of it compiled or ran. Moved to
+      `Archive/uncompiled-services-2026-09-17/`. Do not assume it works.
+- [ ] **LIFX LAN protocol** — every `LIFXControl` method throws
+      "not implemented". Not partial, not functional at all today.
 
 ### In Progress ⚙️
 
-- [ ] LIFX binary UDP protocol (complete implementation)
-- [ ] Hue Entertainment mode support
+- [ ] LIFX binary UDP protocol (currently 0% implemented, not "partial")
 - [ ] Improved error handling and recovery
 
 ### Planned Enhancements 📋
@@ -1593,12 +1609,19 @@ See `CONTRIBUTING.md` for detailed guidelines.
 - **Swift**: 5.0
 
 ### Major Milestones
-- **2024**: Full multi-manufacturer support
-- **2024**: iOS companion infrastructure complete
-- **2024**: DMX control added
-- **2024**: Native Hue Bridge API
+- **2024**: Multi-manufacturer support via HomeKit/Home Assistant
+- **2024**: DMX receive added
 - **2024**: WLED integration
+- **2026-09**: T-0001 overhaul — corrected inflated docs, archived
+  never-compiled iOS sync code, split the monolith model file, finished
+  Hue Bridge pairing, added a real widget target, added Shortcuts/Siri
+  support, and reworked the UI's ad-hoc color usage down to one accent
+  (see `docs/tasks/T-0001_generaluberholung/`)
 - **Initial**: Govee-only support
+
+Note: earlier versions of this file claimed "iOS companion infrastructure
+complete" and "Native Hue Bridge API" as finished milestones. Neither was
+true — see the verified status list above.
 
 ---
 

@@ -10,9 +10,16 @@ This document explains how different smart light manufacturers can be integrated
 The app now includes native protocol support for several manufacturers with direct local network control:
 
 #### Supported via Native Protocols:
-- ✅ **Philips Hue** - Native Hue Bridge API discovery and control
-- ✅ **WLED** - Direct REST API control for WLED controllers  
-- ⚠️ **LIFX** - LAN protocol support (partial implementation)
+- ✅ **Philips Hue** - Bridge discovery and link-button pairing (Settings →
+  Philips Hue → Find Hue Bridges), then full light control. Build/test-
+  verified 2026-09-18; not yet confirmed against a real bridge.
+- ✅ **WLED** - Direct REST API control for WLED controllers, once a device
+  is found via LAN discovery
+- ❌ **LIFX** - Not implemented. `LIFXControl` exists as a stub and throws
+  "not implemented" for every call. Use HomeKit or Home Assistant for LIFX.
+
+_(Corrected 2026-09-17, updated 2026-09-18 against the actual code — see
+`docs/tasks/T-0001_generaluberholung/`.)_
 
 #### How it Works:
 - **Automatic Discovery**: Discovers Hue Bridges, WLED controllers, and LIFX lights via mDNS/Bonjour

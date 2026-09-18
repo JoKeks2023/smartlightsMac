@@ -30,19 +30,27 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $deviceStore.selectedDeviceID) {
-                Section("Groups") { groupSection }
-                Section("Devices") { devicesSection }
+            Group {
+                if deviceStore.devices.isEmpty && deviceStore.groups.isEmpty {
+                    sidebarEmptyState
+                } else {
+                    List(selection: $deviceStore.selectedDeviceID) {
+                        if !deviceStore.groups.isEmpty { Section("Groups") { groupSection } }
+                        Section("Devices") { devicesSection }
+                    }
+                    .listStyle(.sidebar)
+                }
             }
-            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
             .toolbar {
                 Button(action: { Task { await controller.refresh() } }) { Label("Refresh", systemImage: "arrow.clockwise") }
                 Button(action: { showSettings = true }) { Label("Settings", systemImage: "gearshape") }
-                Button(action: { showDeviceDiscovery = true }) { Label("Add Device", systemImage: "plus") }
-                Button(action: { showAddGroup = true }) { Label("Add Group", systemImage: "folder.badge.plus") }
+                Button(action: { showDeviceDiscovery = true }) { Label("Add device", systemImage: "plus") }
+                Button(action: { showAddGroup = true }) { Label("Add group", systemImage: "folder.badge.plus") }
                 if canShowColorControls { Button(action: { showColorPicker.toggle() }) { Label("Color", systemImage: "paintpalette") } }
             }
         } detail: { detailPane }
+        .frame(minWidth: 900, minHeight: 600)
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(settings)
@@ -73,49 +81,70 @@ struct ContentView: View {
         }
     }
 
+    private var sidebarEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lightbulb")
+                .font(.system(size: 30))
+                .foregroundStyle(.tertiary)
+            Text("No devices yet")
+                .font(.headline)
+            Text("Add a device manually, or run discovery from Settings to find lights on your network.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 20)
+            Button("Add device") { showDeviceDiscovery = true }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+
     // MARK: Sections
     private var groupSection: some View {
         ForEach(deviceStore.groups) { group in
             let isSelected = deviceStore.selectedGroupID == group.id
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "folder.fill")
-                    .foregroundStyle(LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing))
-                VStack(alignment: .leading) {
-                    Text(group.name).font(.headline)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(group.name).font(.system(size: 13, weight: .medium))
                     Text("\(group.memberIDs.count) devices").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
-            .padding(6)
-            .background(isSelected ? Color.purple.opacity(0.12) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .contentShape(Rectangle())
             .onTapGesture { deviceStore.selectedGroupID = group.id; deviceStore.selectedDeviceID = nil }
             .contextMenu {
-                Button("Edit Group") { editGroup(group) }
+                Button("Edit group") { editGroup(group) }
                 Divider()
-                Button("Delete Group", role: .destructive) { deleteGroup(group.id) }
+                Button("Delete group", role: .destructive) { deleteGroup(group.id) }
             }
         }
     }
 
     private var devicesSection: some View {
         ForEach(deviceStore.devices) { device in
-            HStack {
-                Circle().fill(device.online ? Color.green : Color.gray).frame(width: 8, height: 8)
-                VStack(alignment: .leading) {
-                    Text(device.name).font(.headline)
+            HStack(spacing: 8) {
+                Circle().fill(device.online ? Color.green : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(device.name).font(.system(size: 13, weight: .medium))
                     Text(device.model ?? "").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(transportBadge(device)).font(.caption2)
-                    .padding(6)
-                    .background(LinearGradient(colors: [Color.blue.opacity(0.15), Color.cyan.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                if !transportBadge(device).isEmpty {
+                    Text(transportBadge(device))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(6)
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.vertical, 2)
             .tag(device.id as String?)
             .contextMenu { addToGroupContext(for: device) }
         }
@@ -139,76 +168,86 @@ struct ContentView: View {
 
     private var headerSection: some View {
         HStack {
-            VStack(alignment: .leading) {
-                Text(detailTitle).font(.title).bold()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(detailTitle).font(.title2).fontWeight(.semibold)
                 if let subtitle = detailSubtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer()
-            if !detailBadge.isEmpty { Text(detailBadge).font(.caption).padding(8).background(LinearGradient(colors: [Color.orange.opacity(0.15), Color.yellow.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)).clipShape(RoundedRectangle(cornerRadius: 10)) }
+            if !detailBadge.isEmpty {
+                Text(detailBadge)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var deviceControls: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Toggle("Power", isOn: $isOn).onChange(of: isOn) { v in
                 guard !isSyncingControlState else { return }
                 Task { await controller.setPower(on: v) }
             }
             HStack {
                 Text("Brightness").frame(width: 90, alignment: .leading)
-                Slider(value: $brightness, in: 0...100, step: 1).tint(.orange).onChange(of: brightness) { val in
+                Slider(value: $brightness, in: 0...100, step: 1).onChange(of: brightness) { val in
                     guard !isSyncingControlState else { return }
                     Task { await controller.setBrightness(Int(val)) }
                 }
                 Text("\(Int(brightness))%")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
                     .frame(width: 50, alignment: .trailing)
             }
             if currentDevice?.supportsColorTemperature == true {
                 HStack {
-                    Text("Color Temp").frame(width: 90, alignment: .leading)
-                    Slider(value: $colorTemperature, in: 2000...9000, step: 100).tint(.yellow).onChange(of: colorTemperature) { val in
+                    Text("Color temp").frame(width: 90, alignment: .leading)
+                    Slider(value: $colorTemperature, in: 2000...9000, step: 100).onChange(of: colorTemperature) { val in
                         guard !isSyncingControlState else { return }
                         Task { await controller.setColorTemperature(Int(val)) }
                     }
-                    Text("\(Int(colorTemperature))K").frame(width: 80, alignment: .trailing)
+                    Text("\(Int(colorTemperature))K")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 80, alignment: .trailing)
                 }
             }
             if currentDevice?.supportsColor == true {
-                Button(action: { showColorPicker = true }) { Label("Pick Color", systemImage: "paintbrush.pointed") }
+                Button(action: { showColorPicker = true }) { Label("Pick color", systemImage: "paintbrush.pointed") }
             }
-            Spacer()
         }
-        .padding(16)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.top, 4)
     }
 
     private func groupControls(groupID: String) -> some View {
-        VStack(spacing: 12) {
-            Toggle("Power (Group)", isOn: $isOn).onChange(of: isOn) { v in Task { await controller.setGroupPower(groupID: groupID, on: v) } }
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle("Power (all)", isOn: $isOn).onChange(of: isOn) { v in Task { await controller.setGroupPower(groupID: groupID, on: v) } }
             HStack {
-                Text("Brightness (Group)").frame(width: 140, alignment: .leading)
-                Slider(value: $brightness, in: 0...100, step: 1).tint(.orange).onChange(of: brightness) { val in Task { await controller.setGroupBrightness(groupID: groupID, value: Int(val)) } }
+                Text("Brightness (all)").frame(width: 140, alignment: .leading)
+                Slider(value: $brightness, in: 0...100, step: 1).onChange(of: brightness) { val in Task { await controller.setGroupBrightness(groupID: groupID, value: Int(val)) } }
                 Text("\(Int(brightness))%")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
                     .frame(width: 50, alignment: .trailing)
             }
-            if groupSupportsColor(groupID) { Button(action: { showColorPicker = true }) { Label("Pick Group Color", systemImage: "paintpalette") } }
-            Spacer()
+            if groupSupportsColor(groupID) { Button(action: { showColorPicker = true }) { Label("Pick color for all", systemImage: "paintpalette") } }
         }
-        .padding(16)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.top, 4)
     }
 
     private var emptySelection: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "lightbulb.slash.fill").font(.system(size: 48)).foregroundStyle(.secondary)
-            Text("No selection").font(.headline).foregroundStyle(.secondary)
-            Text("Select a device or group from the list.").font(.subheadline).foregroundStyle(.secondary)
+        VStack(spacing: 10) {
+            Image(systemName: "lightbulb.slash").font(.system(size: 36)).foregroundStyle(.tertiary)
+            if deviceStore.devices.isEmpty {
+                Text("No devices yet").font(.headline).foregroundStyle(.secondary)
+                Button("Add device") { showDeviceDiscovery = true }
+                    .controlSize(.small)
+                    .padding(.top, 4)
+            } else {
+                Text("No selection").font(.headline).foregroundStyle(.secondary)
+                Text("Select a device or group from the list.").font(.subheadline).foregroundStyle(.tertiary)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(LinearGradient(colors: [Color.gray.opacity(0.06), Color.gray.opacity(0.03)], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var colorPickerSheet: some View {
@@ -333,8 +372,8 @@ struct ContentView: View {
     // MARK: Sheets
     private var addDeviceSheet: some View {
         VStack(spacing: 14) {
-            Text("Add LAN Device").font(.title2).bold()
-            TextField("Device Name", text: $newDeviceName)
+            Text("Add LAN device").font(.title2).fontWeight(.semibold)
+            TextField("Device name", text: $newDeviceName)
             TextField("Device IP (e.g. 192.168.1.50)", text: $newDeviceIP)
             TextField("Model (e.g. H6001)", text: $newDeviceModel)
             HStack {
@@ -357,8 +396,8 @@ struct ContentView: View {
 
     private var addGroupSheet: some View {
         VStack(spacing: 14) {
-            Text("Create Group").font(.title2).bold()
-            TextField("Group Name", text: $newGroupName)
+            Text("Create group").font(.title2).fontWeight(.semibold)
+            TextField("Group name", text: $newGroupName)
             Text("Select devices to include").font(.caption).foregroundStyle(.secondary)
             List(deviceStore.devices, id: \.id) { dev in
                 Toggle(isOn: Binding(get: { selectedMembers.contains(dev.id) }, set: { sel in if sel { selectedMembers.insert(dev.id) } else { selectedMembers.remove(dev.id) } })) { Text(dev.name) }
@@ -994,33 +1033,24 @@ struct DeviceDiscoveryRow: View {
             ))
             .labelsHidden()
         }
-        .padding(12)
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
-    
+
     private var transportBadge: some View {
-        let (text, colors): (String, [Color]) = {
-            if device.transports.contains(.lan) { return ("LAN", [.green, .mint]) }
-            if device.transports.contains(.homeKit) { return ("HomeKit", [.orange, .yellow]) }
-            if device.transports.contains(.cloud) { return ("Cloud", [.blue, .cyan]) }
-            if device.transports.contains(.homeAssistant) { return ("Home Assistant", [.purple, .pink]) }
-            return ("Unbekannt", [.gray, .gray])
+        let text: String = {
+            if device.transports.contains(.lan) { return "LAN" }
+            if device.transports.contains(.homeKit) { return "HomeKit" }
+            if device.transports.contains(.cloud) { return "Cloud" }
+            if device.transports.contains(.homeAssistant) { return "Home Assistant" }
+            return "Unknown"
         }()
-        
+
         return Text(text)
-            .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                LinearGradient(
-                    colors: colors.map { $0.opacity(0.2) },
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(.secondary)
     }
 }
 
@@ -1030,6 +1060,10 @@ struct SettingsView: View {
     @EnvironmentObject private var deviceStore: DeviceStore
     @State private var isScanningLAN = false
     @State private var lanStatus = "Use discovery to find nearby LAN-enabled lights."
+    @State private var isFindingHueBridges = false
+    @State private var hueCandidates: [HueBridgeCandidate] = []
+    @State private var pairingBridgeIP: String?
+    @State private var hueStatus: String?
 
     var body: some View {
         Form {
@@ -1089,6 +1123,61 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            Section("Philips Hue") {
+                if settings.hueBridgeCredentials.isEmpty {
+                    Text("No paired Hue Bridges yet.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(settings.hueBridgeCredentials.keys).sorted(), id: \.self) { ip in
+                        LabeledContent(ip) {
+                            Button("Unpair", role: .destructive) {
+                                settings.hueBridgeCredentials.removeValue(forKey: ip)
+                            }
+                        }
+                    }
+                }
+
+                HStack(alignment: .center, spacing: 10) {
+                    Button(isFindingHueBridges ? "Searching..." : "Find Hue Bridges") {
+                        findHueBridges()
+                    }
+                    .disabled(isFindingHueBridges || pairingBridgeIP != nil)
+
+                    if isFindingHueBridges {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+
+                ForEach(hueCandidates) { candidate in
+                    HStack {
+                        Text(candidate.ip)
+                        Spacer()
+                        if pairingBridgeIP == candidate.ip {
+                            ProgressView().controlSize(.small)
+                            Text("Press the link button now...")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Button("Pair") { pair(candidate) }
+                                .disabled(pairingBridgeIP != nil)
+                        }
+                    }
+                }
+
+                if let hueStatus {
+                    Text(hueStatus)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Text("Pairing needs physical access to the bridge: press its round link button, then click Pair within 30 seconds.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Section("DMX") {
                 Toggle("Enable DMX Receiver", isOn: $settings.dmxEnabled)
 
@@ -1129,6 +1218,32 @@ struct SettingsView: View {
             let count = lanDeviceCount
             lanStatus = count == 0 ? "No LAN devices found. Manual IP entry is still available." : "Found \(count) LAN device\(count == 1 ? "" : "s")."
             isScanningLAN = false
+        }
+    }
+
+    private func findHueBridges() {
+        isFindingHueBridges = true
+        hueStatus = nil
+        Task {
+            let found = await controller.discoverUnpairedHueBridges()
+            hueCandidates = found
+            hueStatus = found.isEmpty ? "No unpaired Hue Bridges found on this network." : nil
+            isFindingHueBridges = false
+        }
+    }
+
+    private func pair(_ candidate: HueBridgeCandidate) {
+        pairingBridgeIP = candidate.ip
+        hueStatus = nil
+        Task {
+            do {
+                try await controller.pairHueBridge(ip: candidate.ip)
+                hueCandidates.removeAll { $0.ip == candidate.ip }
+                hueStatus = "Paired with \(candidate.ip)."
+            } catch {
+                hueStatus = error.localizedDescription
+            }
+            pairingBridgeIP = nil
         }
     }
 }

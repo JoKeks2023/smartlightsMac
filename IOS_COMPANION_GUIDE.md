@@ -1,5 +1,10 @@
 # iOS Companion App Integration Guide
 
+> ⚠️ **Status check (2026-09-17):** the macOS-side bridge code this guide
+> describes was never part of the compiled Xcode target — see
+> `Archive/uncompiled-services-2026-09-17/README.md`. Treat this as a design
+> document, not confirmed working integration.
+
 > **📱 iOS Companion App Now Available!**  
 > The official iOS companion app is ready to use: [SmartLights iOS Companion](https://github.com/JoKeks2023/smartlightsMac-ios-companion)  
 > This guide explains how the integration works. For using the ready-made iOS app, visit the repository above.

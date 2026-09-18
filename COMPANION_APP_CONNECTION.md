@@ -1,5 +1,14 @@
 # Companion App Connection Guide
 
+> ⚠️ **Status check (2026-09-17):** the sync/bridge code this guide describes
+> on the macOS side (`Services/CloudSyncManager.swift`,
+> `MultiTransportSyncManager.swift`, `RemoteControlProtocol.swift`) was never
+> part of the compiled Xcode target and has been moved to
+> `Archive/uncompiled-services-2026-09-17/`. Nothing in this document has
+> been verified against a real iOS companion app. Treat it as a design
+> proposal, not documentation of working behavior. See
+> `docs/tasks/T-0001_generaluberholung/` for details.
+
 ## Overview
 
 This macOS app works seamlessly with an official iOS companion app. The two repositories are designed to work together as a unified smart lighting control system.

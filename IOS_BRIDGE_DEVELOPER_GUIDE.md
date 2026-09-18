@@ -1,5 +1,11 @@
 # iOS Bridge Developer Guide
 
+> ⚠️ **Status check (2026-09-17):** the macOS-side bridge code this guide
+> walks through was never part of the compiled Xcode target — see
+> `Archive/uncompiled-services-2026-09-17/README.md`. This guide describes an
+> intended design, not verified working code. Confirm each API still matches
+> reality before building against it.
+
 > **📱 iOS Companion App Now Available!**  
 > The official iOS companion app is ready to use: [SmartLights iOS Companion](https://github.com/JoKeks2023/smartlightsMac-ios-companion)  
 > For ready-to-use code and complete implementation, visit the iOS companion repository above.
