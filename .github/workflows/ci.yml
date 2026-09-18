@@ -9,15 +9,12 @@ on:
 jobs:
   build:
     name: Build and Test
-    runs-on: macos-13
-    
+    runs-on: macos-15
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    - name: Select Xcode version
-      run: sudo xcode-select -s /Applications/Xcode_15.0.app/Contents/Developer
-      
+
     - name: Show Xcode version
       run: xcodebuild -version
       
@@ -65,7 +62,7 @@ jobs:
 
   syntax-check:
     name: Swift Syntax Check
-    runs-on: macos-13
+    runs-on: macos-15
     
     steps:
     - name: Checkout code
