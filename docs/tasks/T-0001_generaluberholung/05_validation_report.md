@@ -47,6 +47,19 @@
 - **LIFX**: bewusst nicht angefasst (war schon vorher als "nicht
   implementiert" bekannt, kein neuer Regressionscheck nötig).
 
+## Nachtrag: CI auf dem PR
+
+Nach dem Öffnen von PR #13 stand die CI dauerhaft auf "queued" — Ursache
+war `runs-on: macos-13`, ein von GitHub bereits entferntes Runner-Image
+(bestätigt über die Actions-API: Status blieb `queued` ohne `runner_id`).
+Zusätzlich verwendete der Workflow `timeout 600 …`, ein GNU-Coreutils-Befehl,
+der auf macOS-Runnern nicht existiert (`command not found`, Exit 127) — das
+hätte den Build unabhängig vom Runner-Image ebenfalls kaputt gemacht.
+Beides gefixt (`.github/workflows/ci.yml`: `macos-15`, `timeout` entfernt,
+Tests auf `Govee MacTests` beschränkt wegen des bekannten UI-Test-Hangs).
+Danach: **beide Checks grün** (Build and Test 1m55s, Swift Syntax Check
+15s), PR-Status `MERGEABLE`/`CLEAN`.
+
 ## Ehrlichkeitshinweis
 
 Kein Punkt oben wird als "fertig getestet" behauptet, wenn nur der Build
