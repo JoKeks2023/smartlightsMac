@@ -20,30 +20,34 @@ jobs:
       
     - name: Build (without code signing)
       run: |
-        timeout 600 xcodebuild -project "Govee Mac.xcodeproj" \
+        xcodebuild -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
           -configuration Debug \
+          -destination "platform=macOS" \
           CODE_SIGN_IDENTITY="" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
           clean build
-      
+
     - name: Run tests (if any)
       run: |
-        timeout 600 xcodebuild test \
+        xcodebuild test \
           -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
+          -destination "platform=macOS" \
+          -only-testing:"Govee MacTests" \
           CODE_SIGN_IDENTITY="" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
           || echo "No tests configured yet"
       continue-on-error: true
-      
+
     - name: Check for compiler warnings
       run: |
-        timeout 600 xcodebuild -project "Govee Mac.xcodeproj" \
+        xcodebuild -project "Govee Mac.xcodeproj" \
           -scheme "Govee Mac" \
           -configuration Debug \
+          -destination "platform=macOS" \
           CODE_SIGN_IDENTITY="" \
           CODE_SIGNING_REQUIRED=NO \
           CODE_SIGNING_ALLOWED=NO \
