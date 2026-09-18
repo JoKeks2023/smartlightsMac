@@ -201,43 +201,43 @@ class GoveeController: ObservableObject {
         // DMX has highest priority for devices with DMX mapping
         // DMX devices are controlled via incoming DMX signals, not direct control
         // So we skip them here and fall through to other transports
-        
+
         // WLED devices
         if device.transports.contains(.wled), let ip = device.ipAddress {
             return WLEDControl(deviceIP: ip)
         }
-        
+
         // LIFX devices (LAN protocol)
         // Note: LIFX requires UDP binary protocol - not yet fully implemented
         if device.transports.contains(.lifx), device.ipAddress != nil {
             // return LIFXControl(deviceIP: ip)  // Uncomment when UDP protocol is implemented
         }
-        
+
         // Philips Hue Bridge devices — device.ipAddress holds the bridge IP
         // (see HueBridgeDiscovery), not the light's own address.
         if device.transports.contains(.hue), let bridgeIP = device.ipAddress,
            let username = settings.hueBridgeCredentials[bridgeIP] {
             return HueBridgeControl(bridgeIP: bridgeIP, username: username)
         }
-        
+
         if settings.prefersLan, device.transports.contains(.lan), let ip = device.ipAddress {
             return LANControl(deviceIP: ip)
         }
-        
+
         #if canImport(HomeKit)
         if #available(macOS 10.15, *), device.transports.contains(.homeKit), let hkManager = homeKitManager {
             return HomeKitControl(homeManager: hkManager.homeManager)
         }
         #endif
-        
+
         if device.transports.contains(.homeAssistant), let url = URL(string: settings.haBaseURL), !settings.haToken.isEmpty {
             return HomeAssistantControl(baseURL: url, token: settings.haToken)
         }
-        
+
         if device.transports.contains(.cloud), !settings.goveeApiKey.isEmpty {
             return CloudControl(apiKey: settings.goveeApiKey)
         }
-        
+
         return nil
     }
     

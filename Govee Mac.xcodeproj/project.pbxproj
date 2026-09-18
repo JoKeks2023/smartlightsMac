@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		18C3FDD25DB74AB8AC3684D8 /* HueTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AD305C949200AB1BD9 /* HueTransport.swift */; };
+		1EE2F479BD5D41A294F61672 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A4305C93FF00AB1BD9 /* Keychain.swift */; };
+		2729F3C80F284BEFB24E6C60 /* Stores.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A6305C942800AB1BD9 /* Stores.swift */; };
+		3AEE648F27C84F439E83E8D7 /* DeviceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A7305C943100AB1BD9 /* DeviceProtocols.swift */; };
+		47D7307F610C4A1A8E8F3EB3 /* HomeAssistantTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AB305C946500AB1BD9 /* HomeAssistantTransport.swift */; };
+		539846C648384086B1BA944C /* HomeKitTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AA305C945B00AB1BD9 /* HomeKitTransport.swift */; };
 		5B80D9BD2EDCB128000DBD74 /* Govee_MacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9BC2EDCB128000DBD74 /* Govee_MacApp.swift */; };
 		5B80D9BF2EDCB128000DBD74 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9BE2EDCB128000DBD74 /* ContentView.swift */; };
 		5B80D9C12EDCB12A000DBD74 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5B80D9C02EDCB12A000DBD74 /* Assets.xcassets */; };
@@ -15,21 +21,17 @@
 		5B80D9D92EDCB12B000DBD74 /* Govee_MacUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9D82EDCB12B000DBD74 /* Govee_MacUITests.swift */; };
 		5B80D9DB2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B80D9DA2EDCB12B000DBD74 /* Govee_MacUITestsLaunchTests.swift */; };
 		5B8DE3B1305C94B900AB1BD9 /* GoveeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3B0305C94B900AB1BD9 /* GoveeController.swift */; };
+		5B8DE3B4305D71AA00AB1BD9 /* DeviceControlResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3B3305D71AA00AB1BD9 /* DeviceControlResolver.swift */; };
+		5B8DE3B7305D720A00AB1BD9 /* DeviceIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3B6305D720A00AB1BD9 /* DeviceIntents.swift */; };
 		5BF053102F9BDB23007ADBA3 /* TouchBarSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BF0530F2F9BDB23007ADBA3 /* TouchBarSupport.swift */; };
 		5BF053122F9BE9EA007ADBA3 /* Documentation.docc in Sources */ = {isa = PBXBuildFile; fileRef = 5BF053112F9BE9EA007ADBA3 /* Documentation.docc */; };
-		CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688AE791B97D4E60A2269386 /* MenuBarController.swift */; };
-		1EE2F479BD5D41A294F61672 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A4305C93FF00AB1BD9 /* Keychain.swift */; };
-		BC90AFA79D4F47C7959D234E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A5305C941200AB1BD9 /* Models.swift */; };
-		2729F3C80F284BEFB24E6C60 /* Stores.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A6305C942800AB1BD9 /* Stores.swift */; };
-		3AEE648F27C84F439E83E8D7 /* DeviceProtocols.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A7305C943100AB1BD9 /* DeviceProtocols.swift */; };
-		C066515FE48C4340A50C6D06 /* CloudTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A8305C943A00AB1BD9 /* CloudTransport.swift */; };
-		95EB86D567324DAA8686878B /* LANTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A9305C944E00AB1BD9 /* LANTransport.swift */; };
-		539846C648384086B1BA944C /* HomeKitTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AA305C945B00AB1BD9 /* HomeKitTransport.swift */; };
-		47D7307F610C4A1A8E8F3EB3 /* HomeAssistantTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AB305C946500AB1BD9 /* HomeAssistantTransport.swift */; };
-		E1E8177920CF49B2B8E4071F /* DMXEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AC305C948500AB1BD9 /* DMXEngine.swift */; };
-		18C3FDD25DB74AB8AC3684D8 /* HueTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AD305C949200AB1BD9 /* HueTransport.swift */; };
 		8EC4A2BA86F44C5F85940AC8 /* WLEDTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AE305C949900AB1BD9 /* WLEDTransport.swift */; };
+		95EB86D567324DAA8686878B /* LANTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A9305C944E00AB1BD9 /* LANTransport.swift */; };
 		9736908D7ED84329846239BB /* LIFXTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AF305C949C00AB1BD9 /* LIFXTransport.swift */; };
+		BC90AFA79D4F47C7959D234E /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A5305C941200AB1BD9 /* Models.swift */; };
+		C066515FE48C4340A50C6D06 /* CloudTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3A8305C943A00AB1BD9 /* CloudTransport.swift */; };
+		CC490F8E23E64FBCBBEB10E0 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 688AE791B97D4E60A2269386 /* MenuBarController.swift */; };
+		E1E8177920CF49B2B8E4071F /* DMXEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8DE3AC305C948500AB1BD9 /* DMXEngine.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,6 +81,8 @@
 		5B8DE3AE305C949900AB1BD9 /* WLEDTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WLEDTransport.swift; sourceTree = "<group>"; };
 		5B8DE3AF305C949C00AB1BD9 /* LIFXTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LIFXTransport.swift; sourceTree = "<group>"; };
 		5B8DE3B0305C94B900AB1BD9 /* GoveeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoveeController.swift; sourceTree = "<group>"; };
+		5B8DE3B3305D71AA00AB1BD9 /* DeviceControlResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceControlResolver.swift; sourceTree = "<group>"; };
+		5B8DE3B6305D720A00AB1BD9 /* DeviceIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceIntents.swift; sourceTree = "<group>"; };
 		5BF0530F2F9BDB23007ADBA3 /* TouchBarSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchBarSupport.swift; sourceTree = "<group>"; };
 		5BF053112F9BE9EA007ADBA3 /* Documentation.docc */ = {isa = PBXFileReference; lastKnownFileType = folder.documentationcatalog; path = Documentation.docc; sourceTree = "<group>"; };
 		688AE791B97D4E60A2269386 /* MenuBarController.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
@@ -157,6 +161,7 @@
 				5B8DE3A1305C93F000AB1BD9 /* Core */,
 				5B8DE3A2305C93F200AB1BD9 /* Transports */,
 				5B8DE3A3305C93F400AB1BD9 /* DMX */,
+				5B8DE3B5305D720A00AB1BD9 /* AppIntents */,
 			);
 			path = "Govee Mac";
 			sourceTree = "<group>";
@@ -192,6 +197,7 @@
 				5B8DE3A4305C93FF00AB1BD9 /* Keychain.swift */,
 				5B8DE3A5305C941200AB1BD9 /* Models.swift */,
 				5B8DE3A6305C942800AB1BD9 /* Stores.swift */,
+				5B8DE3B3305D71AA00AB1BD9 /* DeviceControlResolver.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -217,6 +223,14 @@
 				5B8DE3AC305C948500AB1BD9 /* DMXEngine.swift */,
 			);
 			path = DMX;
+			sourceTree = "<group>";
+		};
+		5B8DE3B5305D720A00AB1BD9 /* AppIntents */ = {
+			isa = PBXGroup;
+			children = (
+				5B8DE3B6305D720A00AB1BD9 /* DeviceIntents.swift */,
+			);
+			path = AppIntents;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -356,6 +370,8 @@
 				5B80D9BD2EDCB128000DBD74 /* Govee_MacApp.swift in Sources */,
 				5B8DE3B1305C94B900AB1BD9 /* GoveeController.swift in Sources */,
 				1EE2F479BD5D41A294F61672 /* Keychain.swift in Sources */,
+				5B8DE3B4305D71AA00AB1BD9 /* DeviceControlResolver.swift in Sources */,
+				5B8DE3B7305D720A00AB1BD9 /* DeviceIntents.swift in Sources */,
 				BC90AFA79D4F47C7959D234E /* Models.swift in Sources */,
 				2729F3C80F284BEFB24E6C60 /* Stores.swift in Sources */,
 				3AEE648F27C84F439E83E8D7 /* DeviceProtocols.swift in Sources */,
