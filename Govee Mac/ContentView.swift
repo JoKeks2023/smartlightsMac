@@ -38,8 +38,8 @@ struct ContentView: View {
             .toolbar {
                 Button(action: { Task { await controller.refresh() } }) { Label("Refresh", systemImage: "arrow.clockwise") }
                 Button(action: { showSettings = true }) { Label("Settings", systemImage: "gearshape") }
-                Button(action: { showDeviceDiscovery = true }) { Label("Add Device", systemImage: "plus") }
-                Button(action: { showAddGroup = true }) { Label("Add Group", systemImage: "folder.badge.plus") }
+                Button(action: { showDeviceDiscovery = true }) { Label("Add device", systemImage: "plus") }
+                Button(action: { showAddGroup = true }) { Label("Add group", systemImage: "folder.badge.plus") }
                 if canShowColorControls { Button(action: { showColorPicker.toggle() }) { Label("Color", systemImage: "paintpalette") } }
             }
         } detail: { detailPane }
@@ -77,45 +77,45 @@ struct ContentView: View {
     private var groupSection: some View {
         ForEach(deviceStore.groups) { group in
             let isSelected = deviceStore.selectedGroupID == group.id
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "folder.fill")
-                    .foregroundStyle(LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing))
-                VStack(alignment: .leading) {
-                    Text(group.name).font(.headline)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(group.name).font(.system(size: 13, weight: .medium))
                     Text("\(group.memberIDs.count) devices").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
             }
-            .padding(6)
-            .background(isSelected ? Color.purple.opacity(0.12) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             .contentShape(Rectangle())
             .onTapGesture { deviceStore.selectedGroupID = group.id; deviceStore.selectedDeviceID = nil }
             .contextMenu {
-                Button("Edit Group") { editGroup(group) }
+                Button("Edit group") { editGroup(group) }
                 Divider()
-                Button("Delete Group", role: .destructive) { deleteGroup(group.id) }
+                Button("Delete group", role: .destructive) { deleteGroup(group.id) }
             }
         }
     }
 
     private var devicesSection: some View {
         ForEach(deviceStore.devices) { device in
-            HStack {
-                Circle().fill(device.online ? Color.green : Color.gray).frame(width: 8, height: 8)
-                VStack(alignment: .leading) {
-                    Text(device.name).font(.headline)
+            HStack(spacing: 8) {
+                Circle().fill(device.online ? Color.green : Color.secondary.opacity(0.4)).frame(width: 6, height: 6)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(device.name).font(.system(size: 13, weight: .medium))
                     Text(device.model ?? "").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(transportBadge(device)).font(.caption2)
-                    .padding(6)
-                    .background(LinearGradient(colors: [Color.blue.opacity(0.15), Color.cyan.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                if !transportBadge(device).isEmpty {
+                    Text(transportBadge(device))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
             }
-            .padding(6)
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.vertical, 2)
             .tag(device.id as String?)
             .contextMenu { addToGroupContext(for: device) }
         }
@@ -139,76 +139,79 @@ struct ContentView: View {
 
     private var headerSection: some View {
         HStack {
-            VStack(alignment: .leading) {
-                Text(detailTitle).font(.title).bold()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(detailTitle).font(.title2).fontWeight(.semibold)
                 if let subtitle = detailSubtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary) }
             }
             Spacer()
-            if !detailBadge.isEmpty { Text(detailBadge).font(.caption).padding(8).background(LinearGradient(colors: [Color.orange.opacity(0.15), Color.yellow.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)).clipShape(RoundedRectangle(cornerRadius: 10)) }
+            if !detailBadge.isEmpty {
+                Text(detailBadge)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var deviceControls: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Toggle("Power", isOn: $isOn).onChange(of: isOn) { v in
                 guard !isSyncingControlState else { return }
                 Task { await controller.setPower(on: v) }
             }
             HStack {
                 Text("Brightness").frame(width: 90, alignment: .leading)
-                Slider(value: $brightness, in: 0...100, step: 1).tint(.orange).onChange(of: brightness) { val in
+                Slider(value: $brightness, in: 0...100, step: 1).onChange(of: brightness) { val in
                     guard !isSyncingControlState else { return }
                     Task { await controller.setBrightness(Int(val)) }
                 }
                 Text("\(Int(brightness))%")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
                     .frame(width: 50, alignment: .trailing)
             }
             if currentDevice?.supportsColorTemperature == true {
                 HStack {
-                    Text("Color Temp").frame(width: 90, alignment: .leading)
-                    Slider(value: $colorTemperature, in: 2000...9000, step: 100).tint(.yellow).onChange(of: colorTemperature) { val in
+                    Text("Color temp").frame(width: 90, alignment: .leading)
+                    Slider(value: $colorTemperature, in: 2000...9000, step: 100).onChange(of: colorTemperature) { val in
                         guard !isSyncingControlState else { return }
                         Task { await controller.setColorTemperature(Int(val)) }
                     }
-                    Text("\(Int(colorTemperature))K").frame(width: 80, alignment: .trailing)
+                    Text("\(Int(colorTemperature))K")
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 80, alignment: .trailing)
                 }
             }
             if currentDevice?.supportsColor == true {
-                Button(action: { showColorPicker = true }) { Label("Pick Color", systemImage: "paintbrush.pointed") }
+                Button(action: { showColorPicker = true }) { Label("Pick color", systemImage: "paintbrush.pointed") }
             }
-            Spacer()
         }
-        .padding(16)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.top, 4)
     }
 
     private func groupControls(groupID: String) -> some View {
-        VStack(spacing: 12) {
-            Toggle("Power (Group)", isOn: $isOn).onChange(of: isOn) { v in Task { await controller.setGroupPower(groupID: groupID, on: v) } }
+        VStack(alignment: .leading, spacing: 14) {
+            Toggle("Power (all)", isOn: $isOn).onChange(of: isOn) { v in Task { await controller.setGroupPower(groupID: groupID, on: v) } }
             HStack {
-                Text("Brightness (Group)").frame(width: 140, alignment: .leading)
-                Slider(value: $brightness, in: 0...100, step: 1).tint(.orange).onChange(of: brightness) { val in Task { await controller.setGroupBrightness(groupID: groupID, value: Int(val)) } }
+                Text("Brightness (all)").frame(width: 140, alignment: .leading)
+                Slider(value: $brightness, in: 0...100, step: 1).onChange(of: brightness) { val in Task { await controller.setGroupBrightness(groupID: groupID, value: Int(val)) } }
                 Text("\(Int(brightness))%")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
                     .frame(width: 50, alignment: .trailing)
             }
-            if groupSupportsColor(groupID) { Button(action: { showColorPicker = true }) { Label("Pick Group Color", systemImage: "paintpalette") } }
-            Spacer()
+            if groupSupportsColor(groupID) { Button(action: { showColorPicker = true }) { Label("Pick color for all", systemImage: "paintpalette") } }
         }
-        .padding(16)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .padding(.top, 4)
     }
 
     private var emptySelection: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "lightbulb.slash.fill").font(.system(size: 48)).foregroundStyle(.secondary)
+        VStack(spacing: 10) {
+            Image(systemName: "lightbulb.slash").font(.system(size: 36)).foregroundStyle(.tertiary)
             Text("No selection").font(.headline).foregroundStyle(.secondary)
-            Text("Select a device or group from the list.").font(.subheadline).foregroundStyle(.secondary)
+            Text("Select a device or group from the list.").font(.subheadline).foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(LinearGradient(colors: [Color.gray.opacity(0.06), Color.gray.opacity(0.03)], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var colorPickerSheet: some View {
@@ -333,8 +336,8 @@ struct ContentView: View {
     // MARK: Sheets
     private var addDeviceSheet: some View {
         VStack(spacing: 14) {
-            Text("Add LAN Device").font(.title2).bold()
-            TextField("Device Name", text: $newDeviceName)
+            Text("Add LAN device").font(.title2).fontWeight(.semibold)
+            TextField("Device name", text: $newDeviceName)
             TextField("Device IP (e.g. 192.168.1.50)", text: $newDeviceIP)
             TextField("Model (e.g. H6001)", text: $newDeviceModel)
             HStack {
@@ -357,8 +360,8 @@ struct ContentView: View {
 
     private var addGroupSheet: some View {
         VStack(spacing: 14) {
-            Text("Create Group").font(.title2).bold()
-            TextField("Group Name", text: $newGroupName)
+            Text("Create group").font(.title2).fontWeight(.semibold)
+            TextField("Group name", text: $newGroupName)
             Text("Select devices to include").font(.caption).foregroundStyle(.secondary)
             List(deviceStore.devices, id: \.id) { dev in
                 Toggle(isOn: Binding(get: { selectedMembers.contains(dev.id) }, set: { sel in if sel { selectedMembers.insert(dev.id) } else { selectedMembers.remove(dev.id) } })) { Text(dev.name) }
@@ -994,33 +997,24 @@ struct DeviceDiscoveryRow: View {
             ))
             .labelsHidden()
         }
-        .padding(12)
-        .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
-        .background(.thinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(isSelected ? Color.accentColor.opacity(0.1) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
-    
+
     private var transportBadge: some View {
-        let (text, colors): (String, [Color]) = {
-            if device.transports.contains(.lan) { return ("LAN", [.green, .mint]) }
-            if device.transports.contains(.homeKit) { return ("HomeKit", [.orange, .yellow]) }
-            if device.transports.contains(.cloud) { return ("Cloud", [.blue, .cyan]) }
-            if device.transports.contains(.homeAssistant) { return ("Home Assistant", [.purple, .pink]) }
-            return ("Unbekannt", [.gray, .gray])
+        let text: String = {
+            if device.transports.contains(.lan) { return "LAN" }
+            if device.transports.contains(.homeKit) { return "HomeKit" }
+            if device.transports.contains(.cloud) { return "Cloud" }
+            if device.transports.contains(.homeAssistant) { return "Home Assistant" }
+            return "Unknown"
         }()
-        
+
         return Text(text)
-            .font(.caption2)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                LinearGradient(
-                    colors: colors.map { $0.opacity(0.2) },
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .foregroundStyle(.secondary)
     }
 }
 
