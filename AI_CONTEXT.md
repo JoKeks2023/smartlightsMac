@@ -1395,7 +1395,7 @@ jobs:
 
 ## 🗺 Future Roadmap
 
-### Verified against code, 2026-09-17 (T-0001 overhaul) — read this before trusting any older claim in this file
+### Verified against code, 2026-09-18 (T-0001 overhaul) — read this before trusting any older claim in this file
 
 - [x] Govee Cloud API integration
 - [x] Govee LAN discovery/control (UDP)
@@ -1407,24 +1407,31 @@ jobs:
 - [x] State polling
 - [x] Keychain security
 - [x] WLED REST control (once discovered via LAN)
+- [x] **Native Philips Hue Bridge API**, including the link-button pairing
+      flow (`HueTransport.swift`, `SettingsView` → Philips Hue section).
+      Build/test-verified 2026-09-18; not yet confirmed against a real
+      bridge.
+- [x] **GoveeWidgetExtension target** — a real WidgetKit extension now
+      exists and is embedded in the app bundle (`GoveeWidget/`). Shares
+      `Core/Models.swift` with the main target and reads devices from the
+      `group.com.govee.mac` App Group suite, which `DeviceStore` now
+      writes to. Build-verified; live widget-gallery registration not yet
+      confirmed (see `WIDGET_SETUP.md`).
+- [x] **Shortcuts/Siri via App Intents** — `AppIntents/DeviceIntents.swift`
+      donates power + brightness intents through `GoveeMacShortcuts`.
+      `ExtractAppIntentsMetadata` confirmed writing `Metadata.appintents`
+      (previously skipped entirely, no AppIntents dependency existed).
 - [ ] **iOS companion app infrastructure** — NOT actually built. The
       `Services/` code (CloudSyncManager, MultiTransportSyncManager,
       RemoteControlProtocol) was never part of the Xcode target (no entry in
       `project.pbxproj`), so none of it compiled or ran. Moved to
       `Archive/uncompiled-services-2026-09-17/`. Do not assume it works.
-- [ ] **Native Philips Hue Bridge API** — discovery/control code exists
-      (`HueTransport.swift`), but the bridge-pairing ("press link button")
-      flow was never implemented, so it currently finds zero lights.
 - [ ] **LIFX LAN protocol** — every `LIFXControl` method throws
       "not implemented". Not partial, not functional at all today.
-- [ ] **Widget** — `GoveeWidget/GoveeWidget.swift` has no Xcode target; it
-      was never built (see `WIDGET_SETUP.md`).
 
 ### In Progress ⚙️
 
-- [ ] Hue Bridge pairing flow (see above)
 - [ ] LIFX binary UDP protocol (currently 0% implemented, not "partial")
-- [ ] Widget Extension target
 - [ ] Improved error handling and recovery
 
 ### Planned Enhancements 📋
@@ -1606,9 +1613,10 @@ See `CONTRIBUTING.md` for detailed guidelines.
 - **2024**: DMX receive added
 - **2024**: WLED integration
 - **2026-09**: T-0001 overhaul — corrected inflated docs, archived
-  never-compiled iOS sync code, split the monolith model file, started
-  finishing Hue pairing / widget target / Shortcuts (see
-  `docs/tasks/T-0001_generaluberholung/`)
+  never-compiled iOS sync code, split the monolith model file, finished
+  Hue Bridge pairing, added a real widget target, added Shortcuts/Siri
+  support, and reworked the UI's ad-hoc color usage down to one accent
+  (see `docs/tasks/T-0001_generaluberholung/`)
 - **Initial**: Govee-only support
 
 Note: earlier versions of this file claimed "iOS companion infrastructure

@@ -1,16 +1,20 @@
 # Govee Mac - Feature Status
 
 _This file previously claimed "All Requested Features Implemented!" — that
-was not accurate. Corrected 2026-09-17 against the actual code
-(see `docs/tasks/T-0001_generaluberholung/`). Known gaps:_
-- _Philips Hue Bridge pairing (link-button flow) is unimplemented —
-  `HueBridgeDiscovery` always returns zero devices today._
+was not accurate. Corrected 2026-09-17, updated 2026-09-18 against the
+actual code (see `docs/tasks/T-0001_generaluberholung/`). Remaining known
+gaps:_
 - _LIFX LAN control (`LIFXControl`) throws "not implemented" for every call._
-- _The Notification Center widget has no Xcode target — `GoveeWidget.swift`
-  exists but was never built (see `WIDGET_SETUP.md`)._
 - _The iOS companion sync bridge (CloudKit/Local-Network/Bluetooth,
   `Services/`) was never part of the compiled target — moved to
   `Archive/uncompiled-services-2026-09-17/`._
+
+_Fixed since 2026-09-17: Philips Hue Bridge pairing (link-button flow) now
+works (Settings → Philips Hue); the Notification Center widget has a real
+Xcode target and is embedded in the app (see `WIDGET_SETUP.md`); Shortcuts/
+Siri support was added via App Intents. All three are build-verified but
+not yet confirmed against real hardware / the live Shortcuts and widget
+UIs — see the README roadmap for exact verification status._
 
 ## Recent App Status
 
@@ -388,7 +392,6 @@ If auto-discovery doesn't find a device:
 
 ---
 
-**Build Status:** ✅ builds clean on the current Xcode toolchain (verified 2026-09-17)
-**Feature Status:** see corrected gap list at the top of this file — most
-manufacturer/protocol paths work, Hue pairing, LIFX control, and the widget
-target do not yet.
+**Build Status:** ✅ builds clean on the current Xcode toolchain (verified 2026-09-18)
+**Feature Status:** see the gap list at the top of this file — LIFX control
+and the iOS companion bridge remain unfinished; everything else works.

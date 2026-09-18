@@ -253,9 +253,8 @@ I'm sorry for not using the latest Xcode and Swift versions in this project. I c
 ## 🐛 Known Limitations
 
 - **LAN Discovery**: Not all Govee devices support LAN control
-- **HomeKit**: Requires Matter-compatible Govee devices
 - **Free Apple ID**: App can only run on your own Mac (not distributable)
-- **Widget**: Requires manual Xcode target setup (see `WIDGET_SETUP.md`)
+- **LIFX**: LAN control not implemented; use HomeKit or Home Assistant
 
 ## 🔧 Troubleshooting
 
@@ -294,7 +293,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🗺️ Roadmap
 
-_Last verified against the actual codebase: 2026-09-17 (see `docs/tasks/T-0001_generaluberholung/`)._
+_Last verified against the actual codebase: 2026-09-18 (see `docs/tasks/T-0001_generaluberholung/`)._
 
 ### Completed & verified in this build
 - [x] DMX receive (ArtNet/sACN) — maps incoming DMX to device power/brightness/color
@@ -302,21 +301,27 @@ _Last verified against the actual codebase: 2026-09-17 (see `docs/tasks/T-0001_g
 - [x] Home Assistant integration (REST API, works with any HA light entity)
 - [x] Govee Cloud API + Govee LAN discovery/control
 - [x] WLED control (direct REST, once a device is found via LAN discovery)
-
-### Partially implemented (code exists, not finished)
-- [ ] **Native Philips Hue Bridge API** — bridge discovery and light control code
-      exist, but the bridge-pairing ("press link button") flow was never
-      implemented, so `HueBridgeDiscovery` currently always returns zero
-      lights. Hue works today only via HomeKit or Home Assistant.
-- [ ] **LIFX LAN protocol** — `LIFXControl` exists but every method throws
-      "not implemented". LIFX works today only via HomeKit or Home Assistant.
+- [x] **Native Philips Hue Bridge API**, including bridge pairing — Settings →
+      Philips Hue → Find Hue Bridges → press the bridge's link button →
+      Pair. Implemented 2026-09-18; build/tests verified, but not yet
+      confirmed against a real Hue Bridge (none available in the dev
+      environment) — please test end-to-end.
+- [x] **Notification Center widget** — a real `GoveeWidgetExtension` target
+      now exists and is embedded in the app (previously the widget code
+      existed but had no Xcode target at all, see `WIDGET_SETUP.md`).
+      Build-verified; live widget-gallery registration not yet confirmed —
+      open Notification Center → Edit Widgets after running the app once.
+- [x] **Shortcuts / Siri** — "Set Light Power" and "Set Light Brightness"
+      actions are donated via App Intents. `Metadata.appintents` is
+      generated on build; not yet confirmed inside the Shortcuts app UI.
 
 ### Not implemented
+- [ ] **LIFX LAN protocol** — `LIFXControl` exists but every method throws
+      "not implemented". LIFX works today only via HomeKit or Home Assistant.
 - [ ] Scenes and automation support
 - [ ] Schedule/timer functionality
 - [ ] Music sync integration
 - [ ] Multi-window support
-- [ ] Shortcuts app integration
 
 ### iOS companion app bridge — archived, not built
 An earlier iteration added CloudKit/Local-Network/Bluetooth sync code and a

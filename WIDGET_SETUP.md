@@ -1,103 +1,44 @@
-# Widget Setup Instructions
+# Widget Setup
 
-The widget files have been created, but you need to manually add the Widget Extension target in Xcode.
+Updated 2026-09-18 (T-0001 overhaul): the `GoveeWidgetExtension` target now
+exists in `Govee Mac.xcodeproj` and is embedded in the app automatically —
+the manual target-creation steps that used to live in this file are no
+longer needed. Everything below is what's actually true now.
 
-## Adding the Widget Extension
+## What's there
 
-### Option 1: Manual Target Creation (Recommended)
+- `GoveeWidgetExtension` is a WidgetKit app extension target, embedded in
+  `Govee Mac.app/Contents/PlugIns` on every build.
+- `GoveeWidget/GoveeWidget.swift` — the widget UI (Small/Medium/Large).
+- `GoveeWidget/GoveeWidgetExtension.entitlements` — grants the
+  `group.com.govee.mac` App Group, matching the main app's entitlement.
+- `Govee Mac/Core/Models.swift` (which defines `GoveeDevice`/`DeviceColor`)
+  is a member of **both** targets, so the widget decodes the exact same
+  type the main app writes — no duplicated model definitions.
+- `DeviceStore.saveDevices()` (`Govee Mac/Core/Stores.swift`) mirrors the
+  device cache into the `group.com.govee.mac` UserDefaults suite on every
+  save, which is what the widget reads.
 
-1. **Open Xcode**
-   - Open `Govee Mac.xcodeproj`
+## Using it
 
-2. **Add Widget Extension Target**
-   - File → New → Target
-   - Choose "Widget Extension" under macOS
-   - Click Next
-   - Product Name: `GoveeWidget`
-   - Organization Identifier: (your identifier)
-   - Uncheck "Include Configuration Intent"
-   - Click Finish
-   - Choose "Activate" when asked about the scheme
+1. Build and run the main app at least once (so it has cached devices to
+   share).
+2. Open Notification Center → Edit Widgets (or the widget gallery), search
+   "Govee Lights", and add it in your preferred size.
+3. The widget refreshes on a 5-minute timeline. If it shows "No devices",
+   run the main app again to refresh its device list.
 
-3. **Replace Generated Code**
-   - Delete the generated `GoveeWidget.swift` file
-   - Add the existing `GoveeWidget/GoveeWidget.swift` to the target
-   - Or copy the content from the created file to the generated one
+## Known gap / not yet verified
 
-4. **Configure App Groups**
-   - Select the GoveeWidget target
-   - Go to Signing & Capabilities
-   - Click "+ Capability"
-   - Add "App Groups"
-   - Enable `group.com.govee.mac`
-   - Do the same for the main Govee Mac target
-
-5. **Share GoveeDevice Model**
-   - Select `GoveeModels.swift` in Project Navigator
-   - In File Inspector (right panel), check both targets:
-     - ✅ Govee Mac
-     - ✅ GoveeWidget
-   - This allows the widget to use the GoveeDevice struct
-
-6. **Build and Run**
-   - Select the GoveeWidget scheme
-   - Build and run
-   - The widget will appear in the Notification Center editor
-
-### Option 2: Use Widget Without Extension (Simplified)
-
-If you don't need the widget right away, the app works perfectly without it!
-All other features (LAN, HomeKit, HA, menu bar, etc.) are fully functional.
-
-To add the widget later:
-- Follow the steps above when you're ready
-- The widget code is already written and ready to use
-
-## Widget Features
-
-Once configured, the widget provides:
-
-- **Small Widget**: One device with status
-- **Medium Widget**: Three devices overview
-- **Large Widget**: Six devices with full details
-- Updates every 5 minutes automatically
-- Shared data with main app via App Groups
-
-## Troubleshooting
-
-### Widget Not Showing Data
-- Ensure App Groups is enabled in both targets
-- Check group ID is exactly: `group.com.govee.mac`
-- Run the main app first to populate device data
-
-### Build Errors in Widget
-- Verify GoveeModels.swift is added to both targets
-- Check that DeviceColor and GoveeDevice are accessible
-- Ensure import statements are correct
-
-### Widget Not Updating
-- Widgets update based on Timeline policy (5 minutes)
-- Force refresh by removing and re-adding widget
-- Check Console.app for widget extension logs
-
-## Alternative: Skip Widget
-
-The widget is optional! All core functionality works without it:
-- ✅ LAN auto-discovery
-- ✅ HomeKit integration
-- ✅ Home Assistant support
-- ✅ State polling
-- ✅ Keychain security
-- ✅ Menu bar controls
-- ✅ Full device control UI
-
-You can always add the widget extension later when you have time.
-
----
-
-**Current Status:**
-- Widget code: ✅ Written and ready
-- Widget target: ⏳ Needs manual Xcode configuration
-- Main app: ✅ Fully functional without widget
-
-**Recommendation:** Test the main app first, add widget when you want it!
+This was built and build-verified (the `.appex` is produced and embedded,
+`xcodebuild` succeeds) but **not yet confirmed in a live widget gallery** —
+Debug builds run from DerivedData don't always register with
+`pluginkit`/Notification Center the way a normally-signed, Xcode-run build
+does. If the widget doesn't appear:
+- Run the app directly from Xcode (⌘R) rather than via `xcodebuild`, once,
+  so macOS registers the extension normally.
+- Check Signing & Capabilities on both targets — `DEVELOPMENT_TEAM` should
+  be set (it inherited your existing team automatically when the target was
+  created).
+- Confirm both targets show the App Groups capability with
+  `group.com.govee.mac` checked.
